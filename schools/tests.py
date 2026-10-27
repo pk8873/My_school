@@ -57,7 +57,7 @@ class TenantBoundaryTests(TestCase):
         self.client.force_login(self.user_a)
         response = self.client.post("/classes/", {
             "name": "Class 6", "section": "B", "academic_year": "2026-2027",
-            "capacity": "35", "is_active": "on",
+            "capacity": "35", "onboard-is_active": "on",
         })
         self.assertRedirects(response, f"/classes/?school={self.a.pk}")
         self.assertTrue(ClassRoom.objects.filter(school=self.a, name="Class 6").exists())
@@ -195,11 +195,11 @@ class TenantBoundaryTests(TestCase):
         platform_user = User.objects.create_superuser(username="platform_root", email="root@example.test", password="synthetic-test-pass-123")
         self.client.force_login(platform_user)
         response = self.client.post("/platform/", {
-            "name": "Synthetic New School", "slug": "synthetic-new-school",
-            "email": "school@example.test", "phone": "", "address": "",
-            "is_active": "on", "admin_username": "synthetic_new_admin",
-            "admin_email": "admin@example.test", "admin_password": "synthetic-admin-pass-123",
-            "plan": "starter", "student_limit": "25", "trial_days": "14",
+            "onboard-name": "Synthetic New School", "onboard-slug": "synthetic-new-school",
+            "onboard-email": "school@example.test", "onboard-phone": "", "onboard-address": "",
+            "is_active": "on", "onboard-admin_username": "synthetic_new_admin",
+            "onboard-admin_email": "admin@example.test", "onboard-admin_password": "synthetic-admin-pass-123",
+            "onboard-plan": "starter", "onboard-student_limit": "25", "onboard-trial_days": "14",
         })
         self.assertRedirects(response, "/platform/")
         school = School.objects.get(slug="synthetic-new-school")
@@ -262,3 +262,23 @@ class TenantBoundaryTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "plan limit")
         self.assertFalse(Student.objects.filter(school=self.a, admission_number="A-002").exists())
+
+
+    def test_platform_admin_can_update_subscription_plan_metadata(self):
+        from .models import SchoolSubscription
+        SchoolSubscription.objects.create(school=self.a, plan="starter", status="trial", student_limit=20)
+        platform_user = User.objects.create_superuser(username="platform_plan_admin", email="plan@example.test", password="synthetic-test-pass-123")
+        self.client.force_login(platform_user)
+        response = self.client.post("/platform/", {
+            "action": "update_subscription", "school_id": str(self.a.pk),
+            f"sub-{self.a.pk}-plan": "standard",
+            f"sub-{self.a.pk}-status": "active",
+            f"sub-{self.a.pk}-student_limit": "250",
+            f"sub-{self.a.pk}-trial_ends_at": "",
+            f"sub-{self.a.pk}-period_ends_at": "2027-10-01",
+        })
+        self.assertRedirects(response, "/platform/")
+        subscription = SchoolSubscription.objects.get(school=self.a)
+        self.assertEqual(subscription.plan, "standard")
+        self.assertEqual(subscription.student_limit, 250)
+        self.assertEqual(subscription.status, "active")
