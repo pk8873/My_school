@@ -49,3 +49,47 @@ class FeeRecordForm(BootstrapModelForm):
         self.fields["student"].queryset = Student.objects.filter(school=school, is_active=True)
         self.fields["amount"].widget.attrs.update({"min": "0", "step": "0.01"})
         self.fields["paid_amount"].widget.attrs.update({"min": "0", "step": "0.01"})
+
+from .models import Announcement, Exam, ExamResult, Homework
+
+
+class ExamForm(BootstrapModelForm):
+    class Meta:
+        model = Exam
+        fields = ["title", "classroom", "exam_date", "max_marks"]
+        widgets = {"exam_date": forms.DateInput(attrs={"type": "date"}), "max_marks": forms.NumberInput(attrs={"min": "1", "step": "0.01"})}
+
+    def __init__(self, *args, school, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["classroom"].queryset = ClassRoom.objects.filter(school=school, is_active=True)
+        self.fields["classroom"].required = False
+
+
+class ExamResultForm(BootstrapModelForm):
+    class Meta:
+        model = ExamResult
+        fields = ["exam", "student", "marks_obtained", "remarks"]
+        widgets = {"marks_obtained": forms.NumberInput(attrs={"min": "0", "step": "0.01"})}
+
+    def __init__(self, *args, school, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["exam"].queryset = Exam.objects.filter(school=school)
+        self.fields["student"].queryset = Student.objects.filter(school=school, is_active=True)
+
+
+class HomeworkForm(BootstrapModelForm):
+    class Meta:
+        model = Homework
+        fields = ["classroom", "title", "instructions", "assigned_date", "due_date", "is_published"]
+        widgets = {"assigned_date": forms.DateInput(attrs={"type": "date"}), "due_date": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, school, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["classroom"].queryset = ClassRoom.objects.filter(school=school, is_active=True)
+        self.fields["classroom"].required = False
+
+
+class AnnouncementForm(BootstrapModelForm):
+    class Meta:
+        model = Announcement
+        fields = ["title", "body", "audience", "is_published"]
