@@ -143,3 +143,27 @@ class TenantBoundaryTests(TestCase):
         response = self.client.get("/academics/")
         self.assertContains(response, "Alpha exam")
         self.assertNotContains(response, "Beta exam")
+
+
+    def test_school_admin_can_create_timetable_slot(self):
+        teacher = User.objects.create_user(username="synthetic_timetable_teacher", password="synthetic-test-pass-123")
+        Membership.objects.create(user=teacher, school=self.a, role=Membership.Role.TEACHER)
+        self.client.force_login(self.user_a)
+        response = self.client.post("/timetable/", {
+            "classroom": str(self.ca.pk), "subject": "Mathematics", "teacher": str(teacher.pk),
+            "weekday": "mon", "start_time": "09:00", "end_time": "09:45",
+            "room": "Room 5", "is_active": "on",
+        })
+        self.assertRedirects(response, f"/timetable/?school={self.a.pk}")
+        from .models import TimetableSlot
+        self.assertTrue(TimetableSlot.objects.filter(school=self.a, classroom=self.ca, subject="Mathematics").exists())
+        self.assertFalse(TimetableSlot.objects.filter(school=self.b).exists())
+
+    def test_timetable_rejects_end_time_before_start_time(self):
+        from .models import TimetableSlot
+        slot = TimetableSlot(
+            school=self.a, classroom=self.ca, subject="Science", weekday="mon",
+            start_time="10:00", end_time="09:00",
+        )
+        with self.assertRaises(ValidationError):
+            slot.full_clean()
