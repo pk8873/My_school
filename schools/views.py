@@ -240,6 +240,14 @@ def timetable(request):
     })
 
 
+
+def safe_csv_cell(value):
+    """Neutralize spreadsheet formula prefixes in user-controlled text cells."""
+    if isinstance(value, str) and value[:1] in {"=", "+", "-", "@" , "\t", "\r"}:
+        return "'" + value
+    return value
+
+
 @login_required
 @require_GET
 def export_csv(request, report):
@@ -276,5 +284,6 @@ def export_csv(request, report):
     response.write("\ufeff")
     writer = csv.writer(response)
     writer.writerow(headers)
-    writer.writerows(values)
+    for row in values:
+        writer.writerow([safe_csv_cell(value) for value in row])
     return response
