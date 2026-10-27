@@ -1,11 +1,32 @@
 # School Saathi — हिन्दी सेटअप गाइड
 
-## वर्तमान स्थिति
-यह पहला development scaffold है, पूर्ण या production-ready SaaS नहीं। अभी login, school membership, tenant-scoped शुरुआती dashboard, School/ClassRoom/Student/ParentStudentLink models, admin registration और tenant boundary tests का शुरुआती सेट है। Attendance, fees, exams, timetable, पूर्ण parent/student workflows, subscription billing, signed payment webhooks, notifications, PDF/CSV exports, PWA service worker और पूर्ण Super Admin अभी बाकी हैं।
+## इस अपडेट में क्या शामिल है
+यह अभी भी **development / early-access build** है, production-ready SaaS नहीं। इस चरण में शामिल हैं:
 
-## Windows PowerShell में setup
+- Django login और school membership आधारित tenant selection.
+- School, class, student और parent-student link data models.
+- Responsive dashboard: student/class count, आज की attendance count, fee ledger summary और quick actions.
+- School admin/principal के लिए class creation और student admission/search.
+- School admin/principal/teacher के लिए daily attendance entry और date-wise register.
+- School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance.
+- Attendance और fees के लिए Django Admin registration.
+- Role-based access checks और tenant-filtered form choices/querysets.
+- Responsive desktop/mobile layout, PWA manifest, static-only service worker cache. Authenticated pages/forms/student data cache नहीं होते.
+- GitHub Actions checks/tests workflow.
 
-आवश्यक: Python 3.12, Git और VS Code।
+## अभी बाकी महत्वपूर्ण modules
+- Complete SaaS Super Admin dashboard, school onboarding, subscription plans/billing and usage limits.
+- Full parent and student portals (attendance history, fee statements, exam results, notices, homework).
+- Teacher/staff directory, staff permissions and payroll.
+- Exams, marks, report cards, timetable, homework, announcements and messaging.
+- Attendance bulk marking, edit/correction audit trail, PDF/CSV exports and report filters.
+- Fee receipts/PDF, discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks.
+- Full CRUD edit/delete flows, password reset/email delivery, audit logs, backups/restore and monitoring.
+- Dedicated school-scoped Django admin permissions, deployment review, accessibility review and end-to-end production tests.
+
+## Windows PowerShell setup
+
+Required: Python 3.12, Git and VS Code.
 
 ```powershell
 git clone https://github.com/pk8873/My_school.git
@@ -17,17 +38,26 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 python manage.py check
-python manage.py makemigrations schools
+python manage.py makemigrations --check --dry-run
 python manage.py migrate
-python manage.py createsuperuser
 python manage.py test
+python manage.py createsuperuser
 python manage.py runserver
 ```
 
-अगर PowerShell activation रोकता है, उसी terminal session में चलाएं: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`, फिर activation command दोबारा चलाएं। Browser में `http://127.0.0.1:8000/`, admin में `http://127.0.0.1:8000/admin/` और health check में `http://127.0.0.1:8000/health/` खोलें।
+If PowerShell blocks activation, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in that terminal, then activate the virtual environment again.
 
-## Tenant सुरक्षा
-Form से आए school ID को authorization न मानें। हर view में user की active Membership सत्यापित करें और queryset को उसी school तक सीमित रखें। Parent/student के लिए record-level authorization आवश्यक है। Django admin में मौजूदा registrations अभी school-scoped admin permissions लागू नहीं करते; production में school users को unrestricted admin access न दें।
+Open:
+- App: http://127.0.0.1:8000/
+- Sign in: http://127.0.0.1:8000/accounts/login/
+- Dashboard: http://127.0.0.1:8000/dashboard/
+- Admin: http://127.0.0.1:8000/admin/
+- Health check: http://127.0.0.1:8000/health/
 
-## Production चेतावनी
-`DJANGO_DEBUG=False`, मजबूत `DJANGO_SECRET_KEY`, `DATABASE_URL`, allowed hosts, HTTPS और PostgreSQL backups configure किए बिना public deployment न करें। वास्तविक student data इस्तेमाल न करें। इस GitHub connector से test suite execute नहीं की गई है; local PowerShell में commands चलाकर परिणाम सत्यापित करें।
+After creating a superuser, create a School in Django Admin, then create a Membership linking your login user to that school with the `school_admin` role. Log in through the app to use the school pages. Use synthetic records for development.
+
+## Tenant security notes
+Never trust a submitted school ID as authorization. Every school workflow must verify an active Membership and restrict all records to that school. Parent/student pages also need record-level authorization. Current Django Admin registrations are useful for local setup but do **not** implement school-specific admin isolation; do not grant untrusted school staff unrestricted Django Admin access.
+
+## Production warning
+Before a public launch, configure a strong `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, allowed hosts, trusted CSRF origins, HTTPS, PostgreSQL backups, email delivery, error monitoring, access reviews and a documented recovery process. Do not use real student data until security/privacy and legal requirements are reviewed. A PWA manifest/service worker does not mean all offline workflows are implemented. CI status must be checked after the latest commit; do not treat a pushed commit as proof of production readiness.
