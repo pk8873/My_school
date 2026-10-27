@@ -12,7 +12,7 @@
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection.
 - Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation.
 - Tenant-scoped CSV exports for student registers, attendance (date-filterable) and fee ledger, protected by role checks.
-- Super Admin-only school onboarding that creates a tenant, its initial school-admin login and subscription plan metadata in one transaction.
+- Super Admin-only school onboarding that creates a tenant, its initial school-admin login and subscription plan metadata in one transaction; platform admin can edit plan/status/student limits (billing is not connected).
 - School-scoped staff/parent/student account management, parent-child links with fee/result visibility flags, and staff-managed student portal account linking.
 - Subscription plan/status metadata and student admission limits; this is not payment processing or automated subscription billing.
 - Class-wise or school-wide homework assignments with due dates and publish control.
