@@ -71,7 +71,7 @@ def classrooms(request):
         classroom.school = membership.school
         classroom.save()
         messages.success(request, "Class created successfully.")
-        return redirect("classrooms")
+        return redirect(f"{request.path}?school={membership.school_id}")
     rows = ClassRoom.objects.filter(school=membership.school).select_related("class_teacher")
     return render(request, "schools/classrooms.html", {"membership": membership, "form": form, "classrooms": rows})
 
@@ -88,7 +88,7 @@ def students(request):
         student.full_clean()
         student.save()
         messages.success(request, "Student admission saved.")
-        return redirect("students")
+        return redirect(f"{request.path}?school={membership.school_id}")
     query = request.GET.get("q", "").strip()
     rows = Student.objects.filter(school=membership.school).select_related("classroom")
     if query:
@@ -110,7 +110,7 @@ def attendance(request):
         record.full_clean()
         record.save()
         messages.success(request, "Attendance saved.")
-        return redirect("attendance")
+        return redirect(f"{request.path}?school={membership.school_id}")
     selected_date = request.GET.get("date") or timezone.localdate().isoformat()
     rows = AttendanceRecord.objects.filter(school=membership.school, date=selected_date).select_related("student", "student__classroom")
     return render(request, "schools/attendance.html", {"membership": membership, "form": form, "records": rows, "selected_date": selected_date})
@@ -133,7 +133,7 @@ def fees(request):
             record.status = FeeRecord.Status.PARTIAL
         record.save()
         messages.success(request, "Fee record saved. This is a manual record; no online payment was processed.")
-        return redirect("fees")
+        return redirect(f"{request.path}?school={membership.school_id}")
     rows = FeeRecord.objects.filter(school=membership.school).select_related("student", "student__classroom")
     totals = rows.aggregate(total=Sum("amount"), collected=Sum("paid_amount"))
     return render(request, "schools/fees.html", {"membership": membership, "form": form, "fees": rows[:200], "total_amount": totals["total"] or 0, "collected_amount": totals["collected"] or 0})
@@ -186,7 +186,7 @@ def academics(request):
                 obj.school, obj.created_by = membership.school, request.user
                 obj.save()
                 messages.success(request, "Announcement saved.")
-            return redirect("academics")
+            return redirect(f"{request.path}?school={membership.school_id}")
     if role in {Membership.Role.PARENT, Membership.Role.STUDENT}:
         if role == Membership.Role.PARENT:
             child_ids = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, school=membership.school).values_list("id", flat=True)
