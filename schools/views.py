@@ -7,8 +7,8 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, StudentForm
-from .models import AttendanceRecord, ClassRoom, FeeRecord, Membership, Student
+from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm
+from .models import AttendanceRecord, ClassRoom, FeeRecord, Membership, Student, School, SchoolSubscription, ParentStudentLink
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -287,3 +287,57 @@ def export_csv(request, report):
     for row in values:
         writer.writerow([safe_csv_cell(value) for value in row])
     return response
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def platform_admin(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied("Only the platform Super Admin can manage school onboarding.")
+    form = SchoolOnboardingForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        school = form.save(created_by=request.user)
+        messages.success(request, f"School '{school.name}' and its school-admin account were created.")
+        return redirect("platform_admin")
+    schools = School.objects.select_related("subscription").all()
+    return render(request, "schools/platform_admin.html", {
+        "form": form, "schools": schools, "school_count": schools.count(),
+        "active_count": schools.filter(is_active=True).count(),
+    })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def staff_management(request):
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    form = StaffAccountForm(request.POST or None, school=membership.school)
+    link_form = ParentStudentLinkForm(request.POST or None, school=membership.school, prefix="link")
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "create_staff":
+            if form.is_valid():
+                try:
+                    user = form.save()
+                except Exception as exc:
+                    from django.db import IntegrityError
+                    if isinstance(exc, IntegrityError):
+                        form.add_error("username", "That username is already in use.")
+                    else:
+                        raise
+                else:
+                    messages.success(request, f"Account '{user.username}' created with school role.")
+                    return redirect(f"{request.path}?school={membership.school_id}")
+        elif action == "link_parent":
+            if link_form.is_valid():
+                link_form.save(school=membership.school)
+                messages.success(request, "Parent and student profile linked.")
+                return redirect(f"{request.path}?school={membership.school_id}")
+        else:
+            raise PermissionDenied("Unknown staff-management action.")
+    staff_rows = Membership.objects.filter(school=membership.school).select_related("user").order_by("role", "user__username")
+    parent_links = ParentStudentLink.objects.filter(student__school=membership.school).select_related("parent", "student", "student__classroom")
+    return render(request, "schools/staff_management.html", {
+        "membership": membership, "form": form, "link_form": link_form,
+        "staff_rows": staff_rows, "parent_links": parent_links,
+    })
