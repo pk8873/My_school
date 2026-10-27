@@ -54,7 +54,11 @@ def dashboard(request):
             "recent_students": students.select_related("classroom")[:8],
         })
     elif role == Membership.Role.PARENT:
-        context["children"] = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, school=school, is_active=True).select_related("classroom").distinct()
+        children = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, school=school, is_active=True).select_related("classroom").distinct()
+        context["children"] = children
+        child_ids = children.values_list("id", flat=True)
+        context["child_attendance"] = AttendanceRecord.objects.filter(school=school, student_id__in=child_ids).select_related("student").order_by("-date")[:12]
+        context["child_fees"] = FeeRecord.objects.filter(school=school, student_id__in=child_ids, student__parent_links__parent=request.user, student__parent_links__is_active=True, student__parent_links__can_view_fees=True).select_related("student").order_by("due_date")[:12]
     elif role == Membership.Role.STUDENT:
         profile = Student.objects.filter(school=school, portal_user=request.user, is_active=True).select_related("classroom").first()
         context["student_profile"] = profile
