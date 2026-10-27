@@ -7,7 +7,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm
+from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
 from .models import AttendanceRecord, ClassRoom, FeeRecord, Membership, Student, School, SchoolSubscription, ParentStudentLink
 from .tenant import active_memberships
 
@@ -307,15 +307,34 @@ def export_csv(request, report):
 def platform_admin(request):
     if not request.user.is_superuser:
         raise PermissionDenied("Only the platform Super Admin can manage school onboarding.")
-    form = SchoolOnboardingForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
-        school = form.save(created_by=request.user)
-        messages.success(request, f"School '{school.name}' and its school-admin account were created.")
-        return redirect("platform_admin")
+    form = SchoolOnboardingForm(request.POST or None, prefix="onboard")
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "update_subscription":
+            school_id = request.POST.get("school_id")
+            school = School.objects.filter(pk=school_id).first()
+            if school is None or not hasattr(school, "subscription"):
+                raise Http404("School subscription not found.")
+            subscription_form = SubscriptionUpdateForm(request.POST, instance=school.subscription, prefix=f"sub-{school.pk}")
+            if subscription_form.is_valid():
+                subscription_form.save()
+                messages.success(request, f"Subscription metadata updated for {school.name}.")
+                return redirect("platform_admin")
+        elif action == "onboard" and form.is_valid():
+            school = form.save(created_by=request.user)
+            messages.success(request, f"School '{school.name}' and its school-admin account were created.")
+            return redirect("platform_admin")
     schools = School.objects.select_related("subscription").all()
+    subscription_rows = []
+    for school in schools:
+        sub = getattr(school, "subscription", None)
+        if sub:
+            bound = request.method == "POST" and request.POST.get("action") == "update_subscription" and str(school.pk) == request.POST.get("school_id")
+            sub_form = SubscriptionUpdateForm(request.POST if bound else None, instance=sub, prefix=f"sub-{school.pk}")
+            subscription_rows.append({"school": school, "form": sub_form})
     return render(request, "schools/platform_admin.html", {
-        "form": form, "schools": schools, "school_count": schools.count(),
-        "active_count": schools.filter(is_active=True).count(),
+        "form": form, "schools": schools, "subscription_rows": subscription_rows,
+        "school_count": schools.count(), "active_count": schools.filter(is_active=True).count(),
     })
 
 
