@@ -7,7 +7,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm
+from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm
 from .models import AttendanceRecord, ClassRoom, FeeRecord, Membership, Student, School, SchoolSubscription, ParentStudentLink
 from .tenant import active_memberships
 
@@ -56,7 +56,12 @@ def dashboard(request):
     elif role == Membership.Role.PARENT:
         context["children"] = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, school=school, is_active=True).select_related("classroom").distinct()
     elif role == Membership.Role.STUDENT:
-        context["student_profile_pending"] = True
+        profile = Student.objects.filter(school=school, portal_user=request.user, is_active=True).select_related("classroom").first()
+        context["student_profile"] = profile
+        context["student_profile_pending"] = profile is None
+        if profile:
+            context["attendance_history"] = AttendanceRecord.objects.filter(school=school, student=profile).order_by("-date")[:10]
+            context["fee_statement"] = FeeRecord.objects.filter(school=school, student=profile).exclude(status=FeeRecord.Status.WAIVED).order_by("due_date")[:10]
     return render(request, "schools/dashboard.html", context)
 
 
@@ -196,7 +201,7 @@ def academics(request):
             child_ids = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, school=membership.school).values_list("id", flat=True)
             result_child_ids = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, parent_links__can_view_results=True, school=membership.school).values_list("id", flat=True)
         else:
-            child_ids = Student.objects.none().values_list("id", flat=True)
+            child_ids = Student.objects.filter(school=membership.school, portal_user=request.user, is_active=True).values_list("id", flat=True)
             result_child_ids = child_ids
         results = ExamResult.objects.filter(school=membership.school, student_id__in=result_child_ids).select_related("exam", "student")
         homework_rows = Homework.objects.filter(school=membership.school, is_published=True).filter(Q(classroom__isnull=True) | Q(classroom__students__id__in=child_ids)).distinct()
@@ -317,6 +322,7 @@ def staff_management(request):
     require_roles(membership, MANAGEMENT_ROLES)
     form = StaffAccountForm(request.POST or None, school=membership.school)
     link_form = ParentStudentLinkForm(request.POST or None, school=membership.school, prefix="link")
+    student_link_form = StudentAccountLinkForm(request.POST or None, school=membership.school, prefix="student_link")
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "create_staff":
@@ -337,11 +343,16 @@ def staff_management(request):
                 link_form.save(school=membership.school)
                 messages.success(request, "Parent and student profile linked.")
                 return redirect(f"{request.path}?school={membership.school_id}")
+        elif action == "link_student":
+            if student_link_form.is_valid():
+                student_link_form.save()
+                messages.success(request, "Student portal account linked to the selected student profile.")
+                return redirect(f"{request.path}?school={membership.school_id}")
         else:
             raise PermissionDenied("Unknown staff-management action.")
     staff_rows = Membership.objects.filter(school=membership.school).select_related("user").order_by("role", "user__username")
     parent_links = ParentStudentLink.objects.filter(student__school=membership.school).select_related("parent", "student", "student__classroom")
     return render(request, "schools/staff_management.html", {
-        "membership": membership, "form": form, "link_form": link_form,
+        "membership": membership, "form": form, "link_form": link_form, "student_link_form": student_link_form,
         "staff_rows": staff_rows, "parent_links": parent_links,
     })
