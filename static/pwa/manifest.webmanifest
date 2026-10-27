@@ -1,11 +1,13 @@
 {
+  "id": "/dashboard/",
   "name": "School Saathi",
-  "short_name": "SchoolSaathi",
-  "description": "School management and parent/student portal",
-  "start_url": "/accounts/login/",
+  "short_name": "Saathi",
+  "description": "School management and parent communication workspace",
+  "start_url": "/dashboard/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f8f9fa",
-  "theme_color": "#123a63",
-  "icons": []
+  "orientation": "portrait-primary",
+  "background_color": "#f5f7fb",
+  "theme_color": "#112b46",
+  "categories": ["education", "productivity"]
 }
