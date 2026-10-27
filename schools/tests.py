@@ -184,3 +184,81 @@ class TenantBoundaryTests(TestCase):
         self.client.force_login(parent)
         response = self.client.get(f"/reports/students.csv?school={self.a.pk}")
         self.assertEqual(response.status_code, 403)
+
+
+    def test_only_superuser_can_open_platform_onboarding(self):
+        self.client.force_login(self.user_a)
+        response = self.client.get("/platform/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_superuser_can_onboard_school_and_admin_atomically(self):
+        platform_user = User.objects.create_superuser(username="platform_root", email="root@example.test", password="synthetic-test-pass-123")
+        self.client.force_login(platform_user)
+        response = self.client.post("/platform/", {
+            "name": "Synthetic New School", "slug": "synthetic-new-school",
+            "email": "school@example.test", "phone": "", "address": "",
+            "is_active": "on", "admin_username": "synthetic_new_admin",
+            "admin_email": "admin@example.test", "admin_password": "synthetic-admin-pass-123",
+            "plan": "starter", "student_limit": "25", "trial_days": "14",
+        })
+        self.assertRedirects(response, "/platform/")
+        school = School.objects.get(slug="synthetic-new-school")
+        admin_user = User.objects.get(username="synthetic_new_admin")
+        self.assertTrue(Membership.objects.filter(user=admin_user, school=school, role=Membership.Role.SCHOOL_ADMIN).exists())
+        from .models import SchoolSubscription
+        self.assertEqual(school.subscription.student_limit, 25)
+        self.assertEqual(school.subscription.status, SchoolSubscription.Status.TRIAL)
+
+    def test_management_can_create_school_scoped_staff_account(self):
+        self.client.force_login(self.user_a)
+        response = self.client.post(f"/staff/?school={self.a.pk}", {
+            "action": "create_staff", "school": str(self.a.pk),
+            "username": "synthetic_new_teacher", "email": "teacher@example.test",
+            "first_name": "Synthetic", "last_name": "Teacher",
+            "password": "synthetic-teacher-pass-123", "role": "teacher",
+        })
+        self.assertRedirects(response, f"/staff/?school={self.a.pk}")
+        teacher = User.objects.get(username="synthetic_new_teacher")
+        self.assertTrue(Membership.objects.filter(user=teacher, school=self.a, role=Membership.Role.TEACHER).exists())
+        self.assertFalse(Membership.objects.filter(user=teacher, school=self.b).exists())
+
+    def test_management_can_link_parent_only_within_school(self):
+        parent = User.objects.create_user(username="synthetic_link_parent", password="synthetic-test-pass-123")
+        Membership.objects.create(user=parent, school=self.a, role=Membership.Role.PARENT)
+        self.client.force_login(self.user_a)
+        response = self.client.post(f"/staff/?school={self.a.pk}", {
+            "action": "link_parent", "school": str(self.a.pk),
+            "link-parent_username": parent.username, "link-student": str(self.sa.pk),
+            "link-relationship": "Mother", "link-can_view_fees": "on",
+            "link-can_view_results": "on", "link-is_active": "on",
+        })
+        self.assertRedirects(response, f"/staff/?school={self.a.pk}")
+        self.assertTrue(ParentStudentLink.objects.filter(parent=parent, student=self.sa, is_active=True).exists())
+
+    def test_management_can_link_student_account_and_student_sees_only_own_profile(self):
+        student_user = User.objects.create_user(username="synthetic_student_portal", password="synthetic-test-pass-123")
+        Membership.objects.create(user=student_user, school=self.a, role=Membership.Role.STUDENT)
+        self.client.force_login(self.user_a)
+        response = self.client.post(f"/staff/?school={self.a.pk}", {
+            "action": "link_student", "school": str(self.a.pk),
+            "student_link-student": str(self.sa.pk),
+            "student_link-student_username": student_user.username,
+        })
+        self.assertRedirects(response, f"/staff/?school={self.a.pk}")
+        self.client.force_login(student_user)
+        response = self.client.get(f"/dashboard/?school={self.a.pk}")
+        self.assertContains(response, "Synthetic Alpha")
+        self.assertNotContains(response, "Synthetic Beta")
+
+    def test_student_limit_blocks_new_admission(self):
+        from .models import SchoolSubscription
+        SchoolSubscription.objects.create(school=self.a, plan="starter", status="trial", student_limit=1)
+        self.client.force_login(self.user_a)
+        response = self.client.post(f"/students/?school={self.a.pk}", {
+            "school": str(self.a.pk), "classroom": str(self.ca.pk), "admission_number": "A-002",
+            "first_name": "Second", "last_name": "Synthetic", "date_of_birth": "",
+            "admitted_at": "", "is_active": "on",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "plan limit")
+        self.assertFalse(Student.objects.filter(school=self.a, admission_number="A-002").exists())
