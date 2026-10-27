@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Sum
+from django.db.models import F, Sum
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -50,7 +50,7 @@ def dashboard(request):
             "class_count": ClassRoom.objects.filter(school=school, is_active=True).count(),
             "student_count": students.count(),
             "present_today": AttendanceRecord.objects.filter(school=school, date=timezone.localdate(), status=AttendanceRecord.Status.PRESENT).count(),
-            "pending_fees": fees.exclude(status__in=[FeeRecord.Status.PAID, FeeRecord.Status.WAIVED]).aggregate(total=Sum("amount"))["total"] or 0,
+            "pending_fees": fees.exclude(status=FeeRecord.Status.WAIVED).aggregate(total=Sum(F("amount") - F("paid_amount")))["total"] or 0,
             "recent_students": students.select_related("classroom")[:8],
         })
     elif role == Membership.Role.PARENT:
