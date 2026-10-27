@@ -12,6 +12,9 @@
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection.
 - Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation.
 - Tenant-scoped CSV exports for student registers, attendance (date-filterable) and fee ledger, protected by role checks.
+- Super Admin-only school onboarding that creates a tenant, its initial school-admin login and subscription plan metadata in one transaction.
+- School-scoped staff/parent/student account management, parent-child links with fee/result visibility flags, and staff-managed student portal account linking.
+- Subscription plan/status metadata and student admission limits; this is not payment processing or automated subscription billing.
 - Class-wise or school-wide homework assignments with due dates and publish control.
 - Audience-based school announcements for parents, students, staff or everyone.
 - Combined Academics workspace with responsive cards, accessible form labels, helpful empty states and role-aware navigation.
@@ -21,10 +24,10 @@
 - GitHub Actions checks/tests workflow.
 
 ## अभी बाकी महत्वपूर्ण modules
-- Complete SaaS Super Admin dashboard, school onboarding, subscription plans/billing and usage limits.
-- Full parent and student portals (attendance history and fee statements; parents can see linked children’s results/homework/notices where enabled; verified student-to-account linking is still pending).
-- Teacher/staff directory, staff permissions and payroll.
-- Downloadable report cards, bulk marks entry, verified student-to-account linking, homework submission/teacher feedback and push notifications.
+- Automated recurring billing, payment provider integration/webhooks and subscription lifecycle enforcement (Super Admin onboarding, plan metadata and student-limit checks are implemented; paid billing is not connected).
+- Parent/student portal foundations: linked children’s attendance and fee summaries, linked student profile attendance/fee summaries, and academic updates. PDF reports, attendance analytics and homework submissions remain pending.
+- Payroll, staff attendance and staff self-service. Basic school-scoped account creation and staff/family directory are implemented.
+- Downloadable report cards, bulk marks entry, homework submission/teacher feedback and push notifications. Staff-managed student account linking is implemented.
 - Attendance bulk marking, edit/correction audit trail, PDF exports and advanced report filters.
 - Fee receipts/PDF, discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks.
 - Full CRUD edit/delete flows, password reset/email delivery, audit logs, backups/restore and monitoring.
