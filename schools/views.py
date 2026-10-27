@@ -190,9 +190,11 @@ def academics(request):
     if role in {Membership.Role.PARENT, Membership.Role.STUDENT}:
         if role == Membership.Role.PARENT:
             child_ids = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, school=membership.school).values_list("id", flat=True)
+            result_child_ids = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, parent_links__can_view_results=True, school=membership.school).values_list("id", flat=True)
         else:
             child_ids = Student.objects.none().values_list("id", flat=True)
-        results = ExamResult.objects.filter(school=membership.school, student_id__in=child_ids).select_related("exam", "student")
+            result_child_ids = child_ids
+        results = ExamResult.objects.filter(school=membership.school, student_id__in=result_child_ids).select_related("exam", "student")
         homework_rows = Homework.objects.filter(school=membership.school, is_published=True).filter(Q(classroom__isnull=True) | Q(classroom__students__id__in=child_ids)).distinct()
         announcements = Announcement.objects.filter(school=membership.school, is_published=True, audience__in=["everyone", "parents" if role == Membership.Role.PARENT else "students"])
     else:
