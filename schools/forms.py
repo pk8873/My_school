@@ -93,3 +93,19 @@ class AnnouncementForm(BootstrapModelForm):
     class Meta:
         model = Announcement
         fields = ["title", "body", "audience", "is_published"]
+
+
+from .models import TimetableSlot
+
+
+class TimetableSlotForm(BootstrapModelForm):
+    class Meta:
+        model = TimetableSlot
+        fields = ["classroom", "subject", "teacher", "weekday", "start_time", "end_time", "room", "is_active"]
+        widgets = {"start_time": forms.TimeInput(attrs={"type": "time"}), "end_time": forms.TimeInput(attrs={"type": "time"})}
+
+    def __init__(self, *args, school, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["classroom"].queryset = ClassRoom.objects.filter(school=school, is_active=True)
+        self.fields["teacher"].queryset = __import__("django.contrib.auth", fromlist=["get_user_model"]).get_user_model().objects.filter(school_memberships__school=school, school_memberships__role="teacher", school_memberships__is_active=True).distinct()
+        self.fields["teacher"].required = False
