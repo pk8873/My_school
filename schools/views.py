@@ -38,7 +38,7 @@ def dashboard(request):
     selected_id = request.GET.get("school")
     membership = memberships.filter(school_id=selected_id).first() if selected_id else memberships.first()
     if membership is None:
-        if request.user.is_staff or request.user.is_superuser:
+        if request.user.is_superuser:
             return render(request, "schools/dashboard.html", {"platform_admin": True, "memberships": memberships})
         return render(request, "schools/dashboard.html", {"memberships": memberships, "no_school_access": True})
     school, role = membership.school, membership.role
