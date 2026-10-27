@@ -146,7 +146,7 @@ def academics(request):
     membership = get_membership(request)
     role = membership.role
     can_manage = role in ACADEMIC_ROLES
-    if role not in STAFF_ROLES and role not in {Membership.Role.PARENT, Membership.Role.STUDENT}:
+    if role not in ACADEMIC_ROLES and role not in {Membership.Role.PARENT, Membership.Role.STUDENT}:
         raise PermissionDenied("Your role cannot access academic records.")
 
     from .forms import AnnouncementForm, ExamForm, ExamResultForm, HomeworkForm
