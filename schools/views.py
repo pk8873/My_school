@@ -238,3 +238,43 @@ def timetable(request):
         "weekdays": TimetableSlot.Weekday.choices,
         "weekday_groups": [(key, label, [slot for slot in slots if slot.weekday == key]) for key, label in TimetableSlot.Weekday.choices],
     })
+
+
+@login_required
+@require_GET
+def export_csv(request, report):
+    import csv
+    from django.http import HttpResponse
+
+    membership = get_membership(request)
+    if report == "students":
+        require_roles(membership, MANAGEMENT_ROLES)
+        rows = Student.objects.filter(school=membership.school).select_related("classroom")
+        filename = "students.csv"
+        headers = ["Admission number", "First name", "Last name", "Class", "Section", "Active", "Admission date"]
+        values = ((s.admission_number, s.first_name, s.last_name, s.classroom.name, s.classroom.section, s.is_active, s.admitted_at or "") for s in rows)
+    elif report == "attendance":
+        require_roles(membership, ACADEMIC_ROLES)
+        rows = AttendanceRecord.objects.filter(school=membership.school).select_related("student", "student__classroom")
+        date_filter = request.GET.get("date")
+        if date_filter:
+            rows = rows.filter(date=date_filter)
+        filename = "attendance.csv"
+        headers = ["Date", "Admission number", "Student", "Class", "Status", "Note"]
+        values = ((r.date, r.student.admission_number, str(r.student), r.student.classroom.name, r.get_status_display(), r.note) for r in rows)
+    elif report == "fees":
+        require_roles(membership, FEE_ROLES)
+        rows = FeeRecord.objects.filter(school=membership.school).select_related("student")
+        filename = "fee-ledger.csv"
+        headers = ["Admission number", "Student", "Fee head", "Amount", "Paid", "Balance", "Due date", "Status", "Reference"]
+        values = ((r.student.admission_number, str(r.student), r.title, r.amount, r.paid_amount, r.balance, r.due_date or "", r.get_status_display(), r.payment_reference) for r in rows)
+    else:
+        raise Http404("Unknown report.")
+
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.write("\ufeff")
+    writer = csv.writer(response)
+    writer.writerow(headers)
+    writer.writerows(values)
+    return response
