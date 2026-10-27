@@ -73,3 +73,11 @@ class AnnouncementAdmin(admin.ModelAdmin):
     list_display = ("title", "school", "audience", "is_published", "published_at")
     list_filter = ("school", "audience", "is_published")
     search_fields = ("title", "body")
+
+from .models import TimetableSlot
+
+@admin.register(TimetableSlot)
+class TimetableSlotAdmin(admin.ModelAdmin):
+    list_display = ("weekday", "start_time", "end_time", "classroom", "subject", "teacher", "school", "is_active")
+    list_filter = ("school", "weekday", "is_active")
+    search_fields = ("subject", "classroom__name", "teacher__username")
