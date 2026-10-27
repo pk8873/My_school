@@ -137,3 +137,72 @@ def fees(request):
     rows = FeeRecord.objects.filter(school=membership.school).select_related("student", "student__classroom")
     totals = rows.aggregate(total=Sum("amount"), collected=Sum("paid_amount"))
     return render(request, "schools/fees.html", {"membership": membership, "form": form, "fees": rows[:200], "total_amount": totals["total"] or 0, "collected_amount": totals["collected"] or 0})
+
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def academics(request):
+    membership = get_membership(request)
+    role = membership.role
+    can_manage = role in ACADEMIC_ROLES
+    if role not in STAFF_ROLES and role not in {Membership.Role.PARENT, Membership.Role.STUDENT}:
+        raise PermissionDenied("Your role cannot access academic records.")
+
+    from .forms import AnnouncementForm, ExamForm, ExamResultForm, HomeworkForm
+    from .models import Announcement, Exam, ExamResult, Homework
+
+    exam_form = ExamForm(request.POST or None, school=membership.school, prefix="exam") if can_manage else None
+    result_form = ExamResultForm(request.POST or None, school=membership.school, prefix="result") if can_manage else None
+    homework_form = HomeworkForm(request.POST or None, school=membership.school, prefix="homework") if can_manage else None
+    announcement_form = AnnouncementForm(request.POST or None, prefix="announcement") if role in MANAGEMENT_ROLES else None
+
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        selected_form = {"exam": exam_form, "result": result_form, "homework": homework_form, "announcement": announcement_form}.get(action)
+        if selected_form is None:
+            raise PermissionDenied("This action is not available for your role.")
+        if selected_form.is_valid():
+            if action == "exam":
+                obj = selected_form.save(commit=False)
+                obj.school, obj.created_by = membership.school, request.user
+                obj.full_clean()
+                obj.save()
+                messages.success(request, "Exam created.")
+            elif action == "result":
+                obj = selected_form.save(commit=False)
+                obj.school, obj.entered_by = membership.school, request.user
+                obj.full_clean()
+                obj.save()
+                messages.success(request, "Exam result saved.")
+            elif action == "homework":
+                obj = selected_form.save(commit=False)
+                obj.school, obj.assigned_by = membership.school, request.user
+                obj.full_clean()
+                obj.save()
+                messages.success(request, "Homework published.")
+            elif action == "announcement":
+                obj = selected_form.save(commit=False)
+                obj.school, obj.created_by = membership.school, request.user
+                obj.save()
+                messages.success(request, "Announcement saved.")
+            return redirect("academics")
+    if role in {Membership.Role.PARENT, Membership.Role.STUDENT}:
+        if role == Membership.Role.PARENT:
+            child_ids = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, school=membership.school).values_list("id", flat=True)
+        else:
+            child_ids = Student.objects.filter(school=membership.school, admission_number=request.user.username).values_list("id", flat=True)
+        results = ExamResult.objects.filter(school=membership.school, student_id__in=child_ids).select_related("exam", "student")
+        homework_rows = Homework.objects.filter(school=membership.school, is_published=True).filter(models.Q(classroom__isnull=True) | models.Q(classroom__students__id__in=child_ids)).distinct()
+        announcements = Announcement.objects.filter(school=membership.school, is_published=True, audience__in=["everyone", "parents" if role == Membership.Role.PARENT else "students"])
+    else:
+        results = ExamResult.objects.filter(school=membership.school).select_related("exam", "student")[:100]
+        homework_rows = Homework.objects.filter(school=membership.school).select_related("classroom")[:100]
+        announcements = Announcement.objects.filter(school=membership.school)[:100]
+    exams = Exam.objects.filter(school=membership.school).select_related("classroom")[:100]
+    return render(request, "schools/academics.html", {
+        "membership": membership, "role": role, "can_manage": can_manage,
+        "exam_form": exam_form, "result_form": result_form, "homework_form": homework_form,
+        "announcement_form": announcement_form, "exams": exams, "results": results,
+        "homework_items": homework_rows, "announcements": announcements,
+    })
