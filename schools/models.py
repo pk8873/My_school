@@ -29,7 +29,7 @@ class Membership(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=["user", "school"], name="unique_user_school_membership")]
-        indexes = [models.Index(fields=["school", "role", "is_active"])]
+        indexes = [models.Index(fields=["school", "role", "is_active"], name="schools_me_school__e89f75_idx")]
 
 class ClassRoom(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="classrooms")
@@ -42,7 +42,7 @@ class ClassRoom(models.Model):
     class Meta:
         ordering = ["academic_year", "name", "section"]
         constraints = [models.UniqueConstraint(fields=["school", "name", "section", "academic_year"], name="unique_class_section_year_per_school")]
-        indexes = [models.Index(fields=["school", "academic_year"])]
+        indexes = [models.Index(fields=["school", "academic_year"], name="schools_cl_school__d8c6f1_idx")]
     def __str__(self): return f"{self.name} {self.section}".strip()
 
 class Student(models.Model):
@@ -58,7 +58,7 @@ class Student(models.Model):
     class Meta:
         ordering = ["first_name", "last_name"]
         constraints = [models.UniqueConstraint(fields=["school", "admission_number"], name="unique_admission_number_per_school")]
-        indexes = [models.Index(fields=["school", "classroom", "is_active"])]
+        indexes = [models.Index(fields=["school", "classroom", "is_active"], name="schools_st_school__a7bc6a_idx")]
     def clean(self):
         if self.classroom_id and self.school_id and self.classroom.school_id != self.school_id:
             raise ValidationError({"classroom": "Classroom must belong to the same school."})
@@ -74,4 +74,74 @@ class ParentStudentLink(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         constraints = [models.UniqueConstraint(fields=["parent", "student"], name="unique_parent_student_link")]
-        indexes = [models.Index(fields=["parent", "is_active"])]
+        indexes = [models.Index(fields=["parent", "is_active"], name="schools_pa_parent__f19f65_idx")]
+
+
+class AttendanceRecord(models.Model):
+    class Status(models.TextChoices):
+        PRESENT = "present", "Present"
+        ABSENT = "absent", "Absent"
+        LATE = "late", "Late"
+        LEAVE = "leave", "On leave"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="attendance_records")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="attendance_records")
+    date = models.DateField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PRESENT)
+    note = models.CharField(max_length=250, blank=True)
+    marked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "student__first_name"]
+        constraints = [models.UniqueConstraint(fields=["student", "date"], name="unique_student_attendance_date")]
+        indexes = [models.Index(fields=["school", "date"], name="schools_at_school__date_idx")]
+
+    def clean(self):
+        if self.student_id and self.school_id and self.student.school_id != self.school_id:
+            raise ValidationError({"student": "Student must belong to the same school."})
+
+    def __str__(self):
+        return f"{self.student} · {self.date} · {self.get_status_display()}"
+
+
+class FeeRecord(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PARTIAL = "partial", "Partially paid"
+        PAID = "paid", "Paid"
+        WAIVED = "waived", "Waived"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="fee_records")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="fee_records")
+    title = models.CharField(max_length=120)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    paid_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    due_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    payment_reference = models.CharField(max_length=100, blank=True)
+    note = models.CharField(max_length=250, blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["status", "due_date", "student__first_name"]
+        indexes = [models.Index(fields=["school", "status"], name="schools_fe_school__status_idx")]
+
+    def clean(self):
+        errors = {}
+        if self.student_id and self.school_id and self.student.school_id != self.school_id:
+            errors["student"] = "Student must belong to the same school."
+        if self.amount is not None and self.amount < 0:
+            errors["amount"] = "Amount cannot be negative."
+        if self.paid_amount is not None and self.amount is not None and self.paid_amount > self.amount:
+            errors["paid_amount"] = "Paid amount cannot exceed total amount."
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def balance(self):
+        return max(self.amount - self.paid_amount, 0)
+
+    def __str__(self):
+        return f"{self.student} · {self.title}"
