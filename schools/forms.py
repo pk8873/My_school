@@ -291,3 +291,17 @@ class StudentAccountLinkForm(forms.Form):
         student.portal_user = User.objects.get(username=self.cleaned_data["student_username"])
         student.save(update_fields=["portal_user"])
         return student
+
+
+class SubscriptionUpdateForm(BootstrapModelForm):
+    class Meta:
+        model = SchoolSubscription
+        fields = ["plan", "status", "student_limit", "trial_ends_at", "period_ends_at"]
+        widgets = {
+            "trial_ends_at": forms.DateInput(attrs={"type": "date"}),
+            "period_ends_at": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["student_limit"].widget.attrs.update({"min": "1"})
