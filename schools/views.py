@@ -236,4 +236,5 @@ def timetable(request):
     return render(request, "schools/timetable.html", {
         "membership": membership, "form": form, "can_edit": can_edit, "slots": slots,
         "weekdays": TimetableSlot.Weekday.choices,
+        "weekday_groups": [(key, label, [slot for slot in slots if slot.weekday == key]) for key, label in TimetableSlot.Weekday.choices],
     })
