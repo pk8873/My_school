@@ -59,7 +59,7 @@ class TenantBoundaryTests(TestCase):
             "name": "Class 6", "section": "B", "academic_year": "2026-2027",
             "capacity": "35", "is_active": "on",
         })
-        self.assertRedirects(response, "/classes/")
+        self.assertRedirects(response, f"/classes/?school={self.a.pk}")
         self.assertTrue(ClassRoom.objects.filter(school=self.a, name="Class 6").exists())
         self.assertFalse(ClassRoom.objects.filter(school=self.b, name="Class 6").exists())
 
@@ -69,7 +69,7 @@ class TenantBoundaryTests(TestCase):
             "classroom": self.ca.pk, "admission_number": "A-002",
             "first_name": "New", "last_name": "Synthetic", "is_active": "on",
         })
-        self.assertRedirects(response, "/students/")
+        self.assertRedirects(response, f"/students/?school={self.a.pk}")
         self.assertTrue(Student.objects.filter(school=self.a, admission_number="A-002").exists())
 
     def test_other_tenant_class_is_not_selectable_in_student_form(self):
@@ -90,7 +90,7 @@ class TenantBoundaryTests(TestCase):
         response = self.client.post("/attendance/", {
             "student": self.sa.pk, "date": "2026-10-27", "status": "present", "note": "",
         })
-        self.assertRedirects(response, "/attendance/")
+        self.assertRedirects(response, f"/attendance/?school={self.a.pk}")
         self.assertTrue(AttendanceRecord.objects.filter(school=self.a, student=self.sa).exists())
         self.assertFalse(AttendanceRecord.objects.filter(school=self.b, student=self.sb).exists())
 
@@ -101,7 +101,7 @@ class TenantBoundaryTests(TestCase):
             "paid_amount": "250.00", "due_date": "2026-11-15", "status": "pending",
             "payment_reference": "MANUAL-TEST", "note": "",
         })
-        self.assertRedirects(response, "/fees/")
+        self.assertRedirects(response, f"/fees/?school={self.a.pk}")
         fee = FeeRecord.objects.get(school=self.a, student=self.sa)
         self.assertEqual(fee.paid_amount, 250)
         self.assertEqual(fee.balance, 750)
@@ -118,7 +118,7 @@ class TenantBoundaryTests(TestCase):
             "exam-classroom": str(self.ca.pk), "exam-exam_date": "2026-11-10",
             "exam-max_marks": "50",
         })
-        self.assertRedirects(response, "/academics/")
+        self.assertRedirects(response, f"/academics/?school={self.a.pk}")
         from .models import Exam
         self.assertTrue(Exam.objects.filter(school=self.a, title="Synthetic Midterm").exists())
         self.assertFalse(Exam.objects.filter(school=self.b, title="Synthetic Midterm").exists())
