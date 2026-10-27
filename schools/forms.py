@@ -110,3 +110,121 @@ class TimetableSlotForm(BootstrapModelForm):
         self.fields["classroom"].queryset = ClassRoom.objects.filter(school=school, is_active=True)
         self.fields["teacher"].queryset = get_user_model().objects.filter(school_memberships__school=school, school_memberships__role="teacher", school_memberships__is_active=True).distinct()
         self.fields["teacher"].required = False
+
+
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+from datetime import timedelta
+from .models import Membership, ParentStudentLink, School, SchoolSubscription
+
+
+class SchoolOnboardingForm(BootstrapModelForm):
+    admin_username = forms.CharField(max_length=150)
+    admin_email = forms.EmailField()
+    admin_password = forms.CharField(min_length=8, widget=forms.PasswordInput)
+    plan = forms.ChoiceField(choices=SchoolSubscription.Plan.choices)
+    student_limit = forms.IntegerField(min_value=1, max_value=100000, initial=100)
+    trial_days = forms.IntegerField(min_value=0, max_value=365, initial=14)
+
+    class Meta:
+        model = School
+        fields = ["name", "slug", "email", "phone", "address", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ["admin_password"]:
+            self.fields[name].widget.attrs["autocomplete"] = "new-password"
+
+    def save(self, *, created_by=None):
+        from django.db import transaction
+        User = get_user_model()
+        with transaction.atomic():
+            school = super().save(commit=False)
+            school.full_clean()
+            school.save()
+            user = User.objects.create_user(
+                username=self.cleaned_data["admin_username"],
+                email=self.cleaned_data["admin_email"],
+                password=self.cleaned_data["admin_password"],
+            )
+            Membership.objects.create(user=user, school=school, role=Membership.Role.SCHOOL_ADMIN)
+            SchoolSubscription.objects.create(
+                school=school,
+                plan=self.cleaned_data["plan"],
+                status=SchoolSubscription.Status.TRIAL if self.cleaned_data["trial_days"] else SchoolSubscription.Status.ACTIVE,
+                student_limit=self.cleaned_data["student_limit"],
+                trial_ends_at=timezone.localdate() + timedelta(days=self.cleaned_data["trial_days"]) if self.cleaned_data["trial_days"] else None,
+            )
+        return school
+
+
+class StaffAccountForm(forms.Form):
+    username = forms.CharField(max_length=150)
+    email = forms.EmailField(required=False)
+    first_name = forms.CharField(max_length=150, required=False)
+    last_name = forms.CharField(max_length=150, required=False)
+    password = forms.CharField(min_length=8, widget=forms.PasswordInput)
+    role = forms.ChoiceField(choices=[
+        (Membership.Role.PRINCIPAL, "Principal"),
+        (Membership.Role.TEACHER, "Teacher"),
+        (Membership.Role.ACCOUNTANT, "Accountant"),
+        (Membership.Role.PARENT, "Parent"),
+        (Membership.Role.STUDENT, "Student"),
+    ])
+
+    def __init__(self, *args, school, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.school = school
+
+    def save(self):
+        from django.db import transaction
+        User = get_user_model()
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=self.cleaned_data["username"],
+                email=self.cleaned_data["email"],
+                first_name=self.cleaned_data["first_name"],
+                last_name=self.cleaned_data["last_name"],
+                password=self.cleaned_data["password"],
+            )
+            Membership.objects.create(user=user, school=self.school, role=self.cleaned_data["role"])
+        return user
+
+
+class ParentStudentLinkForm(BootstrapModelForm):
+    parent_username = forms.CharField(max_length=150, label="Existing parent username")
+
+    class Meta:
+        model = ParentStudentLink
+        fields = ["student", "relationship", "can_view_fees", "can_view_results", "is_active"]
+
+    def __init__(self, *args, school, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.school = school
+        self.fields["student"].queryset = Student.objects.filter(school=school, is_active=True)
+
+    def clean_parent_username(self):
+        username = self.cleaned_data["parent_username"].strip()
+        User = get_user_model()
+        try:
+            parent = User.objects.get(username=username)
+        except User.DoesNotExist:
+            raise forms.ValidationError("No account exists with this username.")
+        if not parent.school_memberships.filter(school=self.school, role=Membership.Role.PARENT, is_active=True).exists():
+            raise forms.ValidationError("This account must have an active Parent role in this school.")
+        return username
+
+    def save(self, *, school):
+        User = get_user_model()
+        parent = User.objects.get(username=self.cleaned_data["parent_username"])
+        link, _ = ParentStudentLink.objects.update_or_create(
+            parent=parent,
+            student=self.cleaned_data["student"],
+            defaults={
+                "relationship": self.cleaned_data["relationship"],
+                "can_view_fees": self.cleaned_data["can_view_fees"],
+                "can_view_results": self.cleaned_data["can_view_results"],
+                "is_active": self.cleaned_data["is_active"],
+            },
+        )
+        return link
