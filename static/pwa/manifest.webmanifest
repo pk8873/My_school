@@ -1,0 +1,11 @@
+{
+  "name": "School Saathi",
+  "short_name": "SchoolSaathi",
+  "description": "School management and parent/student portal",
+  "start_url": "/accounts/login/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fa",
+  "theme_color": "#123a63",
+  "icons": []
+}
