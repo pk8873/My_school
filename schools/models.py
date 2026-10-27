@@ -145,3 +145,110 @@ class FeeRecord(models.Model):
 
     def __str__(self):
         return f"{self.student} · {self.title}"
+
+
+
+class Exam(models.Model):
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="exams")
+    title = models.CharField(max_length=160)
+    classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, null=True, blank=True, related_name="exams")
+    exam_date = models.DateField()
+    max_marks = models.DecimalField(max_digits=7, decimal_places=2, default=100)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-exam_date", "title"]
+        constraints = [models.UniqueConstraint(fields=["school", "title", "classroom", "exam_date"], name="unique_exam_class_date")]
+
+    def clean(self):
+        errors = {}
+        if self.classroom_id and self.school_id and self.classroom.school_id != self.school_id:
+            errors["classroom"] = "Classroom must belong to the same school."
+        if self.max_marks is not None and self.max_marks <= 0:
+            errors["max_marks"] = "Maximum marks must be greater than zero."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return self.title
+
+
+class ExamResult(models.Model):
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="exam_results")
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name="results")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="exam_results")
+    marks_obtained = models.DecimalField(max_digits=7, decimal_places=2)
+    remarks = models.CharField(max_length=250, blank=True)
+    entered_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["student__first_name", "student__last_name"]
+        constraints = [models.UniqueConstraint(fields=["exam", "student"], name="unique_result_per_exam_student")]
+
+    def clean(self):
+        errors = {}
+        if self.exam_id and self.school_id and self.exam.school_id != self.school_id:
+            errors["exam"] = "Exam must belong to the same school."
+        if self.student_id and self.school_id and self.student.school_id != self.school_id:
+            errors["student"] = "Student must belong to the same school."
+        if self.exam_id and self.student_id and self.exam.classroom_id and self.student.classroom_id != self.exam.classroom_id:
+            errors["student"] = "Student must belong to the exam classroom."
+        if self.marks_obtained is not None and self.exam_id and self.marks_obtained > self.exam.max_marks:
+            errors["marks_obtained"] = "Marks cannot exceed the exam maximum."
+        if self.marks_obtained is not None and self.marks_obtained < 0:
+            errors["marks_obtained"] = "Marks cannot be negative."
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def percentage(self):
+        return round(float(self.marks_obtained / self.exam.max_marks * 100), 2) if self.exam.max_marks else 0
+
+    def __str__(self):
+        return f"{self.student} · {self.exam}"
+
+
+class Homework(models.Model):
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="homework_items")
+    classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, null=True, blank=True, related_name="homework_items")
+    title = models.CharField(max_length=160)
+    instructions = models.TextField()
+    assigned_date = models.DateField(default=__import__("django.utils.timezone", fromlist=["localdate"]).localdate)
+    due_date = models.DateField(null=True, blank=True)
+    assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    is_published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-assigned_date", "title"]
+
+    def clean(self):
+        if self.classroom_id and self.school_id and self.classroom.school_id != self.school_id:
+            raise ValidationError({"classroom": "Classroom must belong to the same school."})
+
+    def __str__(self):
+        return self.title
+
+
+class Announcement(models.Model):
+    class Audience(models.TextChoices):
+        EVERYONE = "everyone", "Everyone"
+        PARENTS = "parents", "Parents"
+        STUDENTS = "students", "Students"
+        STAFF = "staff", "Staff"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="announcements")
+    title = models.CharField(max_length=160)
+    body = models.TextField()
+    audience = models.CharField(max_length=12, choices=Audience.choices, default=Audience.EVERYONE)
+    is_published = models.BooleanField(default=True)
+    published_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        ordering = ["-published_at"]
+
+    def __str__(self):
+        return self.title
