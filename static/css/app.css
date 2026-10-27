@@ -7,3 +7,6 @@
 @media(min-width:1100px){.workspace-grid:has(.notice-card){align-items:start}}
 
 .timetable-day{padding:12px 0 18px;border-bottom:1px solid var(--line)}.timetable-day:last-child{border-bottom:0;padding-bottom:0}.timetable-day h3{font-size:13px;font-weight:800;color:#2a4260;margin:0 0 10px}.timetable-form label{display:block;font-size:11px;font-weight:750;color:#58677b;margin-bottom:6px}.timetable-form input[type=checkbox]{width:17px;height:17px}
+
+.subscription-inline-form{min-width:650px}.subscription-fields{display:grid;grid-template-columns:repeat(3,minmax(110px,1fr));gap:10px;align-items:end}.subscription-fields label{display:block;font-size:10px;font-weight:750;color:#58677b;margin-bottom:4px}.subscription-fields input,.subscription-fields select{width:100%;font-size:11px;padding:7px 8px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.form-field{min-width:0}.form-field label{display:block;font-size:11px;font-weight:750;color:#58677b;margin-bottom:5px}.form-field input,.form-field select,.form-field textarea{width:100%}.form-field small{display:block;margin-top:4px}.form-field-wide{grid-column:1/-1}.checklist{padding-left:20px;color:#58677b;font-size:12px;line-height:2}
+@media(max-width:700px){.form-grid{grid-template-columns:1fr}.subscription-fields{grid-template-columns:repeat(2,minmax(110px,1fr))}}
