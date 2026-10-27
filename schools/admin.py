@@ -81,3 +81,11 @@ class TimetableSlotAdmin(admin.ModelAdmin):
     list_display = ("weekday", "start_time", "end_time", "classroom", "subject", "teacher", "school", "is_active")
     list_filter = ("school", "weekday", "is_active")
     search_fields = ("subject", "classroom__name", "teacher__username")
+
+from .models import SchoolSubscription
+
+@admin.register(SchoolSubscription)
+class SchoolSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("school", "plan", "status", "student_limit", "trial_ends_at", "period_ends_at")
+    list_filter = ("plan", "status")
+    search_fields = ("school__name", "provider_subscription_id")
