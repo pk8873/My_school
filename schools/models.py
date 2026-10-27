@@ -293,3 +293,34 @@ class TimetableSlot(models.Model):
 
     def __str__(self):
         return f"{self.classroom} · {self.subject} · {self.get_weekday_display()}"
+
+
+class SchoolSubscription(models.Model):
+    class Plan(models.TextChoices):
+        STARTER = "starter", "Starter"
+        STANDARD = "standard", "Standard"
+        PREMIUM = "premium", "Premium"
+
+    class Status(models.TextChoices):
+        TRIAL = "trial", "Trial"
+        ACTIVE = "active", "Active"
+        PAST_DUE = "past_due", "Past due"
+        SUSPENDED = "suspended", "Suspended"
+        CANCELLED = "cancelled", "Cancelled"
+
+    school = models.OneToOneField(School, on_delete=models.CASCADE, related_name="subscription")
+    plan = models.CharField(max_length=16, choices=Plan.choices, default=Plan.STARTER)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.TRIAL)
+    student_limit = models.PositiveIntegerField(default=100)
+    trial_ends_at = models.DateField(null=True, blank=True)
+    period_ends_at = models.DateField(null=True, blank=True)
+    provider = models.CharField(max_length=30, blank=True)
+    provider_subscription_id = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["school__name"]
+
+    def __str__(self):
+        return f"{self.school.name} · {self.get_plan_display()} · {self.get_status_display()}"
