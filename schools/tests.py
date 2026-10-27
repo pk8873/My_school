@@ -167,3 +167,20 @@ class TenantBoundaryTests(TestCase):
         )
         with self.assertRaises(ValidationError):
             slot.full_clean()
+
+
+    def test_student_csv_export_is_tenant_scoped(self):
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/reports/students.csv?school={self.a.pk}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response["Content-Type"])
+        content = response.content.decode("utf-8-sig")
+        self.assertIn("Synthetic Alpha", content)
+        self.assertNotIn("Synthetic Beta", content)
+
+    def test_parent_cannot_export_school_student_register(self):
+        parent = User.objects.create_user(username="synthetic_parent_export", password="synthetic-test-pass-123")
+        Membership.objects.create(user=parent, school=self.a, role=Membership.Role.PARENT)
+        self.client.force_login(parent)
+        response = self.client.get(f"/reports/students.csv?school={self.a.pk}")
+        self.assertEqual(response.status_code, 403)
