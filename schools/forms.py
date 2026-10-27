@@ -248,3 +248,46 @@ class ParentStudentLinkForm(BootstrapModelForm):
             },
         )
         return link
+
+
+class StudentAccountLinkForm(forms.Form):
+    student = forms.ModelChoiceField(queryset=Student.objects.none(), label="Student profile")
+    student_username = forms.CharField(max_length=150, label="Existing student username")
+
+    def __init__(self, *args, school, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.school = school
+        self.fields["student"].queryset = Student.objects.filter(school=school, is_active=True)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = (field.widget.attrs.get("class", "") + (" form-select" if isinstance(field.widget, forms.Select) else " form-control")).strip()
+
+    def clean_student_username(self):
+        username = self.cleaned_data["student_username"].strip()
+        User = get_user_model()
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            raise forms.ValidationError("No account exists with this username.")
+        if not user.school_memberships.filter(school=self.school, role=Membership.Role.STUDENT, is_active=True).exists():
+            raise forms.ValidationError("This account must have an active Student role in this school.")
+        return username
+
+    def clean(self):
+        cleaned = super().clean()
+        student = cleaned.get("student")
+        username = cleaned.get("student_username")
+        if student and username:
+            User = get_user_model()
+            user = User.objects.get(username=username)
+            if Student.objects.filter(portal_user=user).exclude(pk=student.pk).exists():
+                self.add_error("student_username", "This account is already linked to another student.")
+            if student.portal_user_id and student.portal_user.username != username:
+                self.add_error("student", "This student profile is already linked to another account.")
+        return cleaned
+
+    def save(self):
+        User = get_user_model()
+        student = self.cleaned_data["student"]
+        student.portal_user = User.objects.get(username=self.cleaned_data["student_username"])
+        student.save(update_fields=["portal_user"])
+        return student
