@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import F, Sum
+from django.db.models import F, Q, Sum
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -191,9 +191,9 @@ def academics(request):
         if role == Membership.Role.PARENT:
             child_ids = Student.objects.filter(parent_links__parent=request.user, parent_links__is_active=True, school=membership.school).values_list("id", flat=True)
         else:
-            child_ids = Student.objects.filter(school=membership.school, admission_number=request.user.username).values_list("id", flat=True)
+            child_ids = Student.objects.none().values_list("id", flat=True)
         results = ExamResult.objects.filter(school=membership.school, student_id__in=child_ids).select_related("exam", "student")
-        homework_rows = Homework.objects.filter(school=membership.school, is_published=True).filter(models.Q(classroom__isnull=True) | models.Q(classroom__students__id__in=child_ids)).distinct()
+        homework_rows = Homework.objects.filter(school=membership.school, is_published=True).filter(Q(classroom__isnull=True) | Q(classroom__students__id__in=child_ids)).distinct()
         announcements = Announcement.objects.filter(school=membership.school, is_published=True, audience__in=["everyone", "parents" if role == Membership.Role.PARENT else "students"])
     else:
         results = ExamResult.objects.filter(school=membership.school).select_related("exam", "student")[:100]
