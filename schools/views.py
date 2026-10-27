@@ -83,12 +83,16 @@ def students(request):
     require_roles(membership, MANAGEMENT_ROLES)
     form = StudentForm(request.POST or None, school=membership.school)
     if request.method == "POST" and form.is_valid():
-        student = form.save(commit=False)
-        student.school = membership.school
-        student.full_clean()
-        student.save()
-        messages.success(request, "Student admission saved.")
-        return redirect(f"{request.path}?school={membership.school_id}")
+        subscription = getattr(membership.school, "subscription", None)
+        if subscription and subscription.student_limit and Student.objects.filter(school=membership.school).count() >= subscription.student_limit:
+            form.add_error(None, f"This school's plan limit of {subscription.student_limit} students has been reached. Ask the platform administrator to review the plan.")
+        else:
+            student = form.save(commit=False)
+            student.school = membership.school
+            student.full_clean()
+            student.save()
+            messages.success(request, "Student admission saved.")
+            return redirect(f"{request.path}?school={membership.school_id}")
     query = request.GET.get("q", "").strip()
     rows = Student.objects.filter(school=membership.school).select_related("classroom")
     if query:
