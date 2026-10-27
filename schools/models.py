@@ -48,6 +48,7 @@ class ClassRoom(models.Model):
 
 class Student(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="students")
+    portal_user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="student_portal_profile")
     classroom = models.ForeignKey(ClassRoom, on_delete=models.PROTECT, related_name="students")
     admission_number = models.CharField(max_length=40)
     first_name = models.CharField(max_length=100)
