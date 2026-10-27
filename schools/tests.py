@@ -40,6 +40,12 @@ class TenantBoundaryTests(TestCase):
         with self.assertRaises(Exception):
             ParentStudentLink.objects.create(parent=parent, student=self.sa)
 
+    def test_service_worker_is_available_at_root_scope(self):
+        response = self.client.get("/sw.js")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Service-Worker-Allowed"], "/")
+        self.assertContains(response, "Never cache authenticated HTML")
+
     def test_dashboard_hides_other_tenant_students(self):
         self.client.force_login(self.user_a)
         response = self.client.get("/dashboard/")
