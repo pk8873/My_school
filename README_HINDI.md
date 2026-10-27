@@ -10,6 +10,7 @@
 - School admin/principal/teacher के लिए daily attendance entry और date-wise register.
 - School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance.
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection.
+- Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation.
 - Class-wise or school-wide homework assignments with due dates and publish control.
 - Audience-based school announcements for parents, students, staff or everyone.
 - Combined Academics workspace with responsive cards, accessible form labels, helpful empty states and role-aware navigation.
@@ -22,7 +23,7 @@
 - Complete SaaS Super Admin dashboard, school onboarding, subscription plans/billing and usage limits.
 - Full parent and student portals (attendance history and fee statements; parents can see linked children’s results/homework/notices where enabled; verified student-to-account linking is still pending).
 - Teacher/staff directory, staff permissions and payroll.
-- Timetable, downloadable report cards, bulk marks entry, parent/student account-to-profile linking, homework submission/teacher feedback and push notifications.
+- Downloadable report cards, bulk marks entry, verified student-to-account linking, homework submission/teacher feedback and push notifications.
 - Attendance bulk marking, edit/correction audit trail, PDF/CSV exports and report filters.
 - Fee receipts/PDF, discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks.
 - Full CRUD edit/delete flows, password reset/email delivery, audit logs, backups/restore and monitoring.
