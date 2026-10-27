@@ -208,3 +208,32 @@ def academics(request):
         "announcement_form": announcement_form, "exams": exams, "results": results,
         "homework_items": homework_rows, "announcements": announcements,
     })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def timetable(request):
+    membership = get_membership(request)
+    require_roles(membership, ACADEMIC_ROLES)
+    from .forms import TimetableSlotForm
+    from .models import TimetableSlot
+
+    can_edit = membership.role in MANAGEMENT_ROLES
+    form = TimetableSlotForm(request.POST or None, school=membership.school) if can_edit else None
+    if request.method == "POST":
+        if not can_edit:
+            raise PermissionDenied("Only school admins and principals can change the timetable.")
+        if form.is_valid():
+            slot = form.save(commit=False)
+            slot.school = membership.school
+            slot.full_clean()
+            slot.save()
+            messages.success(request, "Timetable slot saved.")
+            return redirect(f"{request.path}?school={membership.school_id}")
+    slots = TimetableSlot.objects.filter(school=membership.school, is_active=True).select_related("classroom", "teacher")
+    weekday_order = {key: i for i, (key, label) in enumerate(TimetableSlot.Weekday.choices)}
+    slots = sorted(slots, key=lambda slot: (weekday_order[slot.weekday], slot.start_time, slot.classroom.name))
+    return render(request, "schools/timetable.html", {
+        "membership": membership, "form": form, "can_edit": can_edit, "slots": slots,
+        "weekdays": TimetableSlot.Weekday.choices,
+    })
