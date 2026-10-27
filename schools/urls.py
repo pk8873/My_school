@@ -12,4 +12,5 @@ urlpatterns = [
     path("fees/", views.fees, name="fees"),
     path("academics/", views.academics, name="academics"),
     path("timetable/", views.timetable, name="timetable"),
+    path("reports/<str:report>.csv", views.export_csv, name="export_csv"),
 ]
