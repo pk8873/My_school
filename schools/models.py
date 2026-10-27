@@ -253,3 +253,43 @@ class Announcement(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class TimetableSlot(models.Model):
+    class Weekday(models.TextChoices):
+        MONDAY = "mon", "Monday"
+        TUESDAY = "tue", "Tuesday"
+        WEDNESDAY = "wed", "Wednesday"
+        THURSDAY = "thu", "Thursday"
+        FRIDAY = "fri", "Friday"
+        SATURDAY = "sat", "Saturday"
+        SUNDAY = "sun", "Sunday"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="timetable_slots")
+    classroom = models.ForeignKey(ClassRoom, on_delete=models.CASCADE, related_name="timetable_slots")
+    subject = models.CharField(max_length=100)
+    teacher = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="timetable_slots")
+    weekday = models.CharField(max_length=3, choices=Weekday.choices)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    room = models.CharField(max_length=40, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["weekday", "start_time", "classroom__name"]
+        constraints = [models.UniqueConstraint(fields=["school", "classroom", "weekday", "start_time"], name="unique_timetable_start_per_class")]
+
+    def clean(self):
+        errors = {}
+        if self.classroom_id and self.school_id and self.classroom.school_id != self.school_id:
+            errors["classroom"] = "Classroom must belong to the same school."
+        if self.start_time and self.end_time and self.end_time <= self.start_time:
+            errors["end_time"] = "End time must be later than start time."
+        if self.teacher_id and self.school_id and not self.teacher.school_memberships.filter(school_id=self.school_id, is_active=True, role=Membership.Role.TEACHER).exists():
+            errors["teacher"] = "Teacher must have an active teacher membership in this school."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.classroom} · {self.subject} · {self.get_weekday_display()}"
