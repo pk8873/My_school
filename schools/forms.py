@@ -135,6 +135,18 @@ class SchoolOnboardingForm(BootstrapModelForm):
         for name in ["admin_password"]:
             self.fields[name].widget.attrs["autocomplete"] = "new-password"
 
+    def clean_admin_username(self):
+        username = self.cleaned_data["admin_username"].strip()
+        if get_user_model().objects.filter(username=username).exists():
+            raise forms.ValidationError("That username is already in use.")
+        return username
+
+    def clean_slug(self):
+        slug = self.cleaned_data["slug"].strip().lower()
+        if School.objects.filter(slug=slug).exists():
+            raise forms.ValidationError("That school slug is already in use.")
+        return slug
+
     def save(self, *, created_by=None):
         from django.db import transaction
         User = get_user_model()
@@ -175,6 +187,14 @@ class StaffAccountForm(forms.Form):
     def __init__(self, *args, school, **kwargs):
         super().__init__(*args, **kwargs)
         self.school = school
+        for field in self.fields.values():
+            field.widget.attrs["class"] = (field.widget.attrs.get("class", "") + (" form-select" if isinstance(field.widget, forms.Select) else " form-control")).strip()
+
+    def clean_username(self):
+        username = self.cleaned_data["username"].strip()
+        if get_user_model().objects.filter(username=username).exists():
+            raise forms.ValidationError("That username is already in use.")
+        return username
 
     def save(self):
         from django.db import transaction
