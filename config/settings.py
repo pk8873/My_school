@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -18,6 +19,13 @@ TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates", "DIR
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+if not DEBUG:
+    if SECRET_KEY == "dev-only-insecure-key-change-before-deploy":
+        raise ImproperlyConfigured("Set DJANGO_SECRET_KEY before production startup.")
+    if not ALLOWED_HOSTS:
+        raise ImproperlyConfigured("Set DJANGO_ALLOWED_HOSTS before production startup.")
+    if not DATABASE_URL:
+        raise ImproperlyConfigured("Set DATABASE_URL to a managed PostgreSQL database before production startup.")
 DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=not DEBUG)} if DATABASE_URL else {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": BASE_DIR / "db.sqlite3"}}
 AUTH_PASSWORD_VALIDATORS = [{"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"}, {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"}, {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"}, {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"}]
 LANGUAGE_CODE = "en"
