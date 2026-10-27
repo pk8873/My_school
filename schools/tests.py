@@ -195,9 +195,9 @@ class TenantBoundaryTests(TestCase):
         platform_user = User.objects.create_superuser(username="platform_root", email="root@example.test", password="synthetic-test-pass-123")
         self.client.force_login(platform_user)
         response = self.client.post("/platform/", {
-            "onboard-name": "Synthetic New School", "onboard-slug": "synthetic-new-school",
+            "action": "onboard", "onboard-name": "Synthetic New School", "onboard-slug": "synthetic-new-school",
             "onboard-email": "school@example.test", "onboard-phone": "", "onboard-address": "",
-            "is_active": "on", "onboard-admin_username": "synthetic_new_admin",
+            "onboard-is_active": "on", "onboard-admin_username": "synthetic_new_admin",
             "onboard-admin_email": "admin@example.test", "onboard-admin_password": "synthetic-admin-pass-123",
             "onboard-plan": "starter", "onboard-student_limit": "25", "onboard-trial_days": "14",
         })
