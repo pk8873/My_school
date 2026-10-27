@@ -44,3 +44,32 @@ class FeeRecordAdmin(admin.ModelAdmin):
 
 
 admin.site.register(ParentStudentLink)
+
+from .models import Announcement, Exam, ExamResult, Homework
+
+@admin.register(Exam)
+class ExamAdmin(admin.ModelAdmin):
+    list_display = ("title", "school", "classroom", "exam_date", "max_marks")
+    list_filter = ("school", "exam_date")
+    search_fields = ("title",)
+
+
+@admin.register(ExamResult)
+class ExamResultAdmin(admin.ModelAdmin):
+    list_display = ("exam", "student", "marks_obtained", "entered_by")
+    list_filter = ("school", "exam")
+    search_fields = ("student__first_name", "student__last_name", "exam__title")
+
+
+@admin.register(Homework)
+class HomeworkAdmin(admin.ModelAdmin):
+    list_display = ("title", "school", "classroom", "assigned_date", "due_date", "is_published")
+    list_filter = ("school", "is_published", "assigned_date")
+    search_fields = ("title", "instructions")
+
+
+@admin.register(Announcement)
+class AnnouncementAdmin(admin.ModelAdmin):
+    list_display = ("title", "school", "audience", "is_published", "published_at")
+    list_filter = ("school", "audience", "is_published")
+    search_fields = ("title", "body")
