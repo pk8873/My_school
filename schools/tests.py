@@ -107,3 +107,39 @@ class TenantBoundaryTests(TestCase):
         self.assertEqual(fee.balance, 750)
         self.assertEqual(fee.status, FeeRecord.Status.PARTIAL)
         self.assertFalse(FeeRecord.objects.filter(school=self.b).exists())
+
+
+    def test_teacher_can_create_exam_only_for_own_school(self):
+        teacher = User.objects.create_user(username="synthetic_teacher_exam", password="synthetic-test-pass-123")
+        Membership.objects.create(user=teacher, school=self.a, role=Membership.Role.TEACHER)
+        self.client.force_login(teacher)
+        response = self.client.post("/academics/", {
+            "action": "exam", "exam-title": "Synthetic Midterm",
+            "exam-classroom": str(self.ca.pk), "exam-exam_date": "2026-11-10",
+            "exam-max_marks": "50",
+        })
+        self.assertRedirects(response, "/academics/")
+        from .models import Exam
+        self.assertTrue(Exam.objects.filter(school=self.a, title="Synthetic Midterm").exists())
+        self.assertFalse(Exam.objects.filter(school=self.b, title="Synthetic Midterm").exists())
+
+    def test_academics_page_is_available_to_school_member(self):
+        self.client.force_login(self.user_a)
+        response = self.client.get("/academics/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Create exam")
+        self.assertContains(response, "Assign homework")
+
+    def test_parent_cannot_see_another_school_child_results(self):
+        from .models import Exam, ExamResult
+        parent = User.objects.create_user(username="synthetic_parent_results", password="synthetic-test-pass-123")
+        Membership.objects.create(user=parent, school=self.a, role=Membership.Role.PARENT)
+        ParentStudentLink.objects.create(parent=parent, student=self.sa, can_view_results=True)
+        exam_a = Exam.objects.create(school=self.a, title="Alpha exam", classroom=self.ca, exam_date="2026-10-01", max_marks=100)
+        ExamResult.objects.create(school=self.a, exam=exam_a, student=self.sa, marks_obtained=85)
+        exam_b = Exam.objects.create(school=self.b, title="Beta exam", classroom=self.cb, exam_date="2026-10-01", max_marks=100)
+        ExamResult.objects.create(school=self.b, exam=exam_b, student=self.sb, marks_obtained=99)
+        self.client.force_login(parent)
+        response = self.client.get("/academics/")
+        self.assertContains(response, "Alpha exam")
+        self.assertNotContains(response, "Beta exam")
