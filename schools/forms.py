@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth import get_user_model
 from .models import AttendanceRecord, ClassRoom, FeeRecord, Student
 
 
@@ -107,5 +108,5 @@ class TimetableSlotForm(BootstrapModelForm):
     def __init__(self, *args, school, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["classroom"].queryset = ClassRoom.objects.filter(school=school, is_active=True)
-        self.fields["teacher"].queryset = __import__("django.contrib.auth", fromlist=["get_user_model"]).get_user_model().objects.filter(school_memberships__school=school, school_memberships__role="teacher", school_memberships__is_active=True).distinct()
+        self.fields["teacher"].queryset = get_user_model().objects.filter(school_memberships__school=school, school_memberships__role="teacher", school_memberships__is_active=True).distinct()
         self.fields["teacher"].required = False
