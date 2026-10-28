@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
-from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance
+from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -84,6 +84,72 @@ def classrooms(request):
         return redirect(f"{request.path}?school={membership.school_id}")
     rows = ClassRoom.objects.filter(school=membership.school).select_related("class_teacher")
     return render(request, "schools/classrooms.html", {"membership": membership, "form": form, "classrooms": rows})
+
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def student_promotions(request):
+    """Bulk-promote active students between classes and retain a per-student audit history."""
+    from datetime import date
+    from django.utils.dateparse import parse_date
+
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    school = membership.school
+    classrooms = ClassRoom.objects.filter(school=school, is_active=True).order_by("academic_year", "name", "section")
+    error = ""
+    if request.method == "POST":
+        source_id = request.POST.get("from_classroom", "").strip()
+        target_id = request.POST.get("to_classroom", "").strip()
+        effective_date = parse_date(request.POST.get("effective_date", "").strip())
+        note = request.POST.get("note", "").strip()
+        if len(note) > 500:
+            error = "Note must be 500 characters or fewer."
+        elif not source_id.isdigit() or not target_id.isdigit():
+            error = "Please select both the current class and the destination class."
+        elif not effective_date:
+            error = "Please provide a valid effective date in YYYY-MM-DD format."
+        else:
+            source = classrooms.filter(pk=int(source_id)).first()
+            target = classrooms.filter(pk=int(target_id)).first()
+            if source is None or target is None:
+                error = "The selected class is not active or does not belong to this school."
+            elif source.pk == target.pk:
+                error = "Choose a different destination class."
+            else:
+                students = Student.objects.filter(
+                    school=school, classroom=source, is_active=True
+                ).order_by("pk")
+                student_list = list(students[:2001])
+                if not student_list:
+                    error = "No active students were found in the selected current class."
+                elif len(student_list) > 2000:
+                    error = "This class has more than 2,000 active students. Please contact support before proceeding."
+                else:
+                    with transaction.atomic():
+                        StudentClassHistory.objects.bulk_create([
+                            StudentClassHistory(
+                                school=school, student=student, from_classroom=source,
+                                to_classroom=target, effective_date=effective_date,
+                                promoted_by=request.user, note=note,
+                            )
+                            for student in student_list
+                        ])
+                        students.update(classroom=target)
+                    messages.success(request, f"{len(student_list)} students moved from {source} to {target}. Class-change history has been saved.")
+                    return redirect(f"{request.path}?school={school.pk}")
+    history = StudentClassHistory.objects.filter(school=school).select_related(
+        "student", "from_classroom", "to_classroom", "promoted_by"
+    )[:100]
+    source_counts = {
+        classroom.pk: Student.objects.filter(school=school, classroom=classroom, is_active=True).count()
+        for classroom in classrooms
+    }
+    return render(request, "schools/student_promotions.html", {
+        "membership": membership, "classrooms": classrooms, "history": history,
+        "source_counts": source_counts, "today": date.today().isoformat(), "error": error,
+    })
 
 
 @login_required
