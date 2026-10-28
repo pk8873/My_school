@@ -100,3 +100,38 @@ class SchoolEventsTests(TestCase):
         self.assertTrue(SchoolEvent.objects.filter(
             school=self.school, title="Science exhibition", audience="students"
         ).exists())
+
+
+    def test_event_search_matches_title_description_and_location(self):
+        self.parent_event.description = "Bring the student progress file"
+        self.parent_event.location = "Main library"
+        self.parent_event.save(update_fields=["description", "location"])
+        self.client.force_login(self.parent)
+        response = self.client.get(f"/events/?school={self.school.pk}&q=library")
+        self.assertContains(response, "Parent meeting")
+        self.assertNotContains(response, "Annual day")
+        response = self.client.get(f"/events/?school={self.school.pk}&q=progress")
+        self.assertContains(response, "Parent meeting")
+
+    def test_event_date_filters_show_upcoming_past_and_all(self):
+        past_event = SchoolEvent.objects.create(
+            school=self.school, title="Past parent conference",
+            starts_at=timezone.now() - timedelta(days=4),
+            audience=SchoolEvent.Audience.PARENTS,
+        )
+        self.client.force_login(self.parent)
+        upcoming = self.client.get(f"/events/?school={self.school.pk}&when=upcoming")
+        self.assertContains(upcoming, "Parent meeting")
+        self.assertNotContains(upcoming, "Past parent conference")
+        past = self.client.get(f"/events/?school={self.school.pk}&when=past")
+        self.assertContains(past, "Past parent conference")
+        self.assertNotContains(past, "Parent meeting")
+        all_events = self.client.get(f"/events/?school={self.school.pk}&when=all")
+        self.assertContains(all_events, "Past parent conference")
+        self.assertContains(all_events, "Parent meeting")
+
+    def test_event_search_keeps_school_and_audience_boundaries(self):
+        self.client.force_login(self.parent)
+        response = self.client.get(f"/events/?school={self.school.pk}&q=event")
+        self.assertNotContains(response, "Other school's private event")
+        self.assertNotContains(response, "Staff training")
