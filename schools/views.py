@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
-from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory
+from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory, TransferCertificate
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -1183,6 +1183,95 @@ def student_id_cards_pdf(request):
     response["Content-Disposition"] = 'attachment; filename="student-id-cards.pdf"'
     return response
 
+
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def transfer_certificate_register(request):
+    """Issue and track school-scoped transfer certificates; cancelled records remain in the register."""
+    from uuid import uuid4
+    from django.utils.dateparse import parse_date
+
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    school = membership.school
+    error = ""
+    if request.method == "POST":
+        action = request.POST.get("action", "issue")
+        if action == "cancel":
+            record_id = request.POST.get("certificate_id", "").strip()
+            record = TransferCertificate.objects.filter(school=school, pk=record_id).first() if record_id.isdigit() else None
+            if record is None:
+                error = "Certificate record not found in this school."
+            elif record.status == TransferCertificate.Status.CANCELLED:
+                error = "This certificate is already cancelled."
+            else:
+                record.status = TransferCertificate.Status.CANCELLED
+                record.cancelled_by = request.user
+                record.cancelled_at = timezone.now()
+                record.save(update_fields=["status", "cancelled_by", "cancelled_at"])
+                messages.success(request, f"Certificate {record.certificate_number} cancelled. Its register entry has been retained.")
+                return redirect(f"{request.path}?school={school.pk}")
+        elif action == "issue":
+            student_id = request.POST.get("student", "").strip()
+            leaving_raw = request.POST.get("leaving_date", "").strip()
+            issue_raw = request.POST.get("issue_date", "").strip()
+            reason = request.POST.get("reason", "").strip()
+            conduct = request.POST.get("conduct", "").strip()
+            remarks = request.POST.get("remarks", "").strip()
+            student = Student.objects.filter(school=school, pk=int(student_id)).select_related("classroom").first() if student_id.isdigit() else None
+            issue_date = parse_date(issue_raw) if issue_raw else timezone.localdate()
+            leaving_date = parse_date(leaving_raw) if leaving_raw else None
+            if student is None:
+                error = "Please select a student from this school."
+            elif issue_date is None or (issue_raw and parse_date(issue_raw) is None) or (leaving_raw and leaving_date is None):
+                error = "Please enter valid issue and leaving dates."
+            elif len(reason) > 250 or len(conduct) > 100 or len(remarks) > 500:
+                error = "Please shorten the reason, conduct, or remarks field."
+            else:
+                certificate_number = f"TC-{issue_date.year}-{uuid4().hex[:8].upper()}"
+                record = TransferCertificate.objects.create(
+                    school=school, student=student, certificate_number=certificate_number,
+                    issue_date=issue_date, leaving_date=leaving_date, reason=reason,
+                    conduct=conduct, remarks=remarks, issued_by=request.user,
+                )
+                rows = [
+                    ["Field", "Details"],
+                    ["Certificate number", record.certificate_number],
+                    ["Status", "ISSUED — verify details and sign/seal as required"],
+                    ["School", school.name],
+                    ["School address", school.address or "Not provided"],
+                    ["School phone", school.phone or "Not provided"],
+                    ["Student name", str(student)],
+                    ["Admission number", student.admission_number],
+                    ["Date of birth", student.date_of_birth.isoformat() if student.date_of_birth else "Not recorded"],
+                    ["Class / academic year", f"{student.classroom} / {student.classroom.academic_year}"],
+                    ["Date of admission", student.admitted_at.isoformat() if student.admitted_at else "Not recorded"],
+                    ["Date of issue", record.issue_date.isoformat()],
+                    ["Date of leaving", record.leaving_date.isoformat() if record.leaving_date else "Not specified"],
+                    ["Reason for leaving", record.reason or "Not specified"],
+                    ["Conduct", record.conduct or "Not assessed"],
+                    ["Remarks", record.remarks or "—"],
+                    ["Authorised signatory", "________________________________"],
+                    ["School seal", "________________________________"],
+                ]
+                response = _build_pdf(
+                    "TRANSFER CERTIFICATE",
+                    "Generated from the school register. Verify all details and complete authorised signature/seal before delivery.",
+                    rows, filename="transfer-certificate.pdf",
+                )
+                response["Cache-Control"] = "private, no-store"
+                return response
+        else:
+            error = "Unknown register action."
+
+    records = TransferCertificate.objects.filter(school=school).select_related("student", "student__classroom", "issued_by", "cancelled_by")[:200]
+    students = Student.objects.filter(school=school).select_related("classroom").order_by("first_name", "last_name")
+    return render(request, "schools/transfer_certificate_register.html", {
+        "membership": membership, "records": records, "students": students,
+        "error": error, "today": timezone.localdate().isoformat(),
+    })
 
 
 @login_required
