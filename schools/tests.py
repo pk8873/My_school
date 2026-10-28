@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import TestCase
-from .models import AttendanceRecord, ClassRoom, FeeRecord, Membership, ParentStudentLink, School, Student
+from .models import AttendanceRecord, ClassRoom, FeeRecord, FeePayment, Membership, ParentStudentLink, School, Student
 from .tenant import require_membership
 
 User = get_user_model()
@@ -144,6 +144,53 @@ class TenantBoundaryTests(TestCase):
         self.assertEqual(fee.balance, 750)
         self.assertEqual(fee.status, FeeRecord.Status.PARTIAL)
         self.assertFalse(FeeRecord.objects.filter(school=self.b).exists())
+
+
+
+    def test_manual_fee_payment_updates_balance_and_creates_history(self):
+        fee = FeeRecord.objects.create(
+            school=self.a, student=self.sa, title="Payment history tuition",
+            amount="1000.00", paid_amount="0.00", status=FeeRecord.Status.PENDING,
+        )
+        self.client.force_login(self.user_a)
+        response = self.client.post(f"/fees/{fee.pk}/payments/?school={self.a.pk}", {
+            "school": str(self.a.pk), "amount": "300.00", "payment_date": "2026-10-28",
+            "method": "upi", "reference": "SYNTHETIC-REF-1", "note": "Test entry",
+        })
+        self.assertRedirects(response, f"/fees/{fee.pk}/payments/?school={self.a.pk}")
+        fee.refresh_from_db()
+        self.assertEqual(fee.paid_amount, 300)
+        self.assertEqual(fee.balance, 700)
+        self.assertEqual(fee.status, FeeRecord.Status.PARTIAL)
+        payment = FeePayment.objects.get(fee_record=fee)
+        self.assertEqual(payment.amount, 300)
+        self.assertEqual(payment.school, self.a)
+        self.assertEqual(payment.recorded_by, self.user_a)
+
+    def test_manual_fee_payment_rejects_amount_above_balance(self):
+        fee = FeeRecord.objects.create(
+            school=self.a, student=self.sa, title="Payment cap tuition",
+            amount="100.00", paid_amount="20.00", status=FeeRecord.Status.PARTIAL,
+        )
+        self.client.force_login(self.user_a)
+        response = self.client.post(f"/fees/{fee.pk}/payments/?school={self.a.pk}", {
+            "school": str(self.a.pk), "amount": "81.00", "payment_date": "2026-10-28",
+            "method": "cash", "reference": "", "note": "",
+        })
+        self.assertEqual(response.status_code, 200)
+        fee.refresh_from_db()
+        self.assertEqual(fee.paid_amount, 20)
+        self.assertFalse(FeePayment.objects.filter(fee_record=fee).exists())
+        self.assertContains(response, "outstanding balance")
+
+    def test_manual_fee_payment_cannot_access_another_school_fee(self):
+        fee = FeeRecord.objects.create(
+            school=self.b, student=self.sb, title="Private beta fee",
+            amount="100.00", paid_amount="0.00", status=FeeRecord.Status.PENDING,
+        )
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/fees/{fee.pk}/payments/?school={self.a.pk}")
+        self.assertEqual(response.status_code, 404)
 
 
     def test_fee_register_overdue_filter_is_school_scoped(self):
