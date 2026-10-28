@@ -75,3 +75,6 @@ Never trust a submitted school ID as authorization. Every school workflow must v
 
 ## Production warning
 Before a public launch, configure a strong `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, allowed hosts, trusted CSRF origins, HTTPS, PostgreSQL backups, email delivery, error monitoring, access reviews and a documented recovery process. Do not use real student data until security/privacy and legal requirements are reviewed. A PWA manifest/service worker does not mean all offline workflows are implemented. CI status must be checked after the latest commit; do not treat a pushed commit as proof of production readiness.
+
+
+School events calendar supports search by title, description, and location, with upcoming/past/all date filters. Search results remain school-scoped and audience-filtered.
