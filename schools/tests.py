@@ -301,6 +301,77 @@ class TenantBoundaryTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
+
+    def test_student_can_submit_homework_for_linked_profile(self):
+        from .models import Homework, HomeworkSubmission
+        student_user = User.objects.create_user(username="synthetic_homework_student", password="synthetic-test-pass-123")
+        Membership.objects.create(user=student_user, school=self.a, role=Membership.Role.STUDENT)
+        self.sa.portal_user = student_user
+        self.sa.save(update_fields=["portal_user"])
+        homework = Homework.objects.create(
+            school=self.a, classroom=self.ca, title="Synthetic homework",
+            instructions="Answer the question.", is_published=True,
+        )
+        self.client.force_login(student_user)
+        response = self.client.post(
+            f"/homework/{homework.pk}/submit/?school={self.a.pk}",
+            {"submission_text": "This is a synthetic homework answer."},
+        )
+        self.assertRedirects(response, f"/academics/?school={self.a.pk}")
+        submission = HomeworkSubmission.objects.get(homework=homework, student=self.sa)
+        self.assertEqual(submission.submission_text, "This is a synthetic homework answer.")
+        self.assertEqual(submission.status, HomeworkSubmission.Status.SUBMITTED)
+
+    def test_student_cannot_submit_another_school_homework(self):
+        from .models import Homework
+        student_user = User.objects.create_user(username="synthetic_wrong_school_student", password="synthetic-test-pass-123")
+        Membership.objects.create(user=student_user, school=self.a, role=Membership.Role.STUDENT)
+        self.sa.portal_user = student_user
+        self.sa.save(update_fields=["portal_user"])
+        homework_b = Homework.objects.create(
+            school=self.b, classroom=self.cb, title="Beta private homework",
+            instructions="Private school task.", is_published=True,
+        )
+        self.client.force_login(student_user)
+        response = self.client.get(f"/homework/{homework_b.pk}/submit/?school={self.a.pk}")
+        self.assertEqual(response.status_code, 404)
+
+    def test_teacher_can_review_submission_only_inside_own_school(self):
+        from .models import Homework, HomeworkSubmission
+        teacher = User.objects.create_user(username="synthetic_homework_teacher", password="synthetic-test-pass-123")
+        Membership.objects.create(user=teacher, school=self.a, role=Membership.Role.TEACHER)
+        homework = Homework.objects.create(
+            school=self.a, classroom=self.ca, title="Reviewable homework",
+            instructions="Test instructions.", assigned_by=teacher,
+        )
+        submission = HomeworkSubmission.objects.create(
+            school=self.a, homework=homework, student=self.sa, submission_text="My answer",
+        )
+        self.client.force_login(teacher)
+        response = self.client.post(
+            f"/homework/submissions/{submission.pk}/review/?school={self.a.pk}",
+            {"status": "reviewed", "teacher_feedback": "Good work."},
+        )
+        self.assertRedirects(response, f"/academics/?school={self.a.pk}")
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, HomeworkSubmission.Status.REVIEWED)
+        self.assertEqual(submission.teacher_feedback, "Good work.")
+        self.assertEqual(submission.graded_by, teacher)
+        self.assertIsNotNone(submission.graded_at)
+
+    def test_seed_demo_data_is_repeatable_and_synthetic(self):
+        from django.core.management import call_command
+        from .models import Homework, School
+        call_command("seed_demo_data", verbosity=0)
+        school = School.objects.get(slug="school-saathi-demo")
+        first_student_count = Student.objects.filter(school=school).count()
+        first_homework_count = Homework.objects.filter(school=school).count()
+        call_command("seed_demo_data", verbosity=0)
+        self.assertEqual(Student.objects.filter(school=school).count(), first_student_count)
+        self.assertEqual(Homework.objects.filter(school=school).count(), first_homework_count)
+        self.assertEqual(first_student_count, 3)
+
+
     def test_platform_admin_can_update_subscription_plan_metadata(self):
         from .models import SchoolSubscription
         SchoolSubscription.objects.create(school=self.a, plan="starter", status="trial", student_limit=20)
