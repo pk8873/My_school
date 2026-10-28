@@ -533,6 +533,43 @@ def export_csv(request, report):
             row.user.get_full_name(), row.user.email, row.get_role_display(),
             "Active" if row.is_active else "Inactive", row.created_at,
         ) for row in rows)
+    elif report == "upcoming-birthdays":
+        from datetime import date, timedelta
+
+        require_roles(membership, MANAGEMENT_ROLES)
+        days_raw = request.GET.get("days", "30").strip()
+        if not days_raw.isdigit() or not 1 <= int(days_raw) <= 365:
+            return HttpResponse("days must be a whole number from 1 to 365.", status=400)
+        days = int(days_raw)
+        today = timezone.localdate()
+        last_day = today + timedelta(days=days)
+        rows = Student.objects.filter(
+            school=membership.school, is_active=True, date_of_birth__isnull=False,
+            classroom__school=membership.school,
+        ).select_related("classroom").order_by("classroom__name", "first_name", "last_name")[:10000]
+        birthday_values = []
+        for student in rows:
+            dob = student.date_of_birth
+            try:
+                next_birthday = date(today.year, dob.month, dob.day)
+            except ValueError:
+                # Celebrate 29 February birthdays on 28 February in non-leap years.
+                next_birthday = date(today.year, 2, 28)
+            if next_birthday < today:
+                try:
+                    next_birthday = date(today.year + 1, dob.month, dob.day)
+                except ValueError:
+                    next_birthday = date(today.year + 1, 2, 28)
+            if today <= next_birthday <= last_day:
+                birthday_values.append((
+                    next_birthday, student.admission_number, str(student),
+                    student.classroom.name, student.classroom.section, dob,
+                    next_birthday.year - dob.year,
+                ))
+        birthday_values.sort(key=lambda row: (row[0], row[3], row[2]))
+        filename = "upcoming-student-birthdays.csv"
+        headers = ["Birthday date", "Admission number", "Student", "Class", "Section", "Date of birth", "Turning age"]
+        values = birthday_values
     elif report == "students":
         require_roles(membership, MANAGEMENT_ROLES)
         rows = Student.objects.filter(school=membership.school).select_related("classroom")
