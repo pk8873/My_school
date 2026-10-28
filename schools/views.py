@@ -108,7 +108,7 @@ def students(request):
     if query:
         from django.db.models import Q
         rows = rows.filter(Q(first_name__icontains=query) | Q(last_name__icontains=query) | Q(admission_number__icontains=query))
-    return render(request, "schools/students.html", {"membership": membership, "form": form, "students": rows[:200], "query": query})
+    return render(request, "schools/students.html", {"membership": membership, "form": form, "students": rows[:200], "query": query, "classrooms": ClassRoom.objects.filter(school=membership.school, is_active=True)})
 
 
 @login_required
@@ -1037,6 +1037,86 @@ def student_report_card_pdf(request, student_id):
         table_rows.append(["No results recorded", "—", "—", "—", "—"])
     subtitle = f"School: {membership.school.name} | Student: {student.first_name} {student.last_name} | Admission: {student.admission_number} | Class: {student.classroom}"
     return _build_pdf("Student Report Card", subtitle, table_rows, filename=f"report-card-{student.admission_number}.pdf")
+
+
+
+@login_required
+@require_GET
+def student_id_cards_pdf(request):
+    """Generate a printable sheet of student ID cards for one school/class."""
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    students = Student.objects.filter(
+        school=membership.school, is_active=True,
+        classroom__school=membership.school,
+    ).select_related("classroom").order_by("classroom__name", "classroom__section", "first_name", "last_name")
+    classroom_id = request.GET.get("classroom", "").strip()
+    if classroom_id:
+        if not classroom_id.isdigit():
+            return HttpResponse("Invalid classroom filter.", status=400)
+        classroom = ClassRoom.objects.filter(pk=int(classroom_id), school=membership.school, is_active=True).first()
+        if classroom is None:
+            raise Http404("Classroom not found.")
+        students = students.filter(classroom=classroom)
+    student_list = list(students[:201])
+    if not student_list:
+        return HttpResponse("No active students found for the selected school/class.", status=404)
+    if len(student_list) > 200:
+        return HttpResponse("Please select a class or narrow the list to 200 students or fewer.", status=400)
+
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="IDSchool", parent=styles["Heading3"], fontSize=10, leading=12, alignment=1, textColor=colors.HexColor("#17365D"), spaceAfter=3))
+    styles.add(ParagraphStyle(name="IDName", parent=styles["Heading2"], fontSize=11, leading=13, alignment=1, spaceAfter=4))
+    styles.add(ParagraphStyle(name="IDText", parent=styles["BodyText"], fontSize=8, leading=10, alignment=1))
+    cards = []
+    for student in student_list:
+        school_name = _pdf_escape(membership.school.name)
+        student_name = _pdf_escape(f"{student.first_name} {student.last_name}".strip())
+        fields = [
+            [Paragraph(f"<b>{school_name}</b>", styles["IDSchool"])],
+            [Paragraph(student_name, styles["IDName"])],
+            [Paragraph(f"Admission No: {_pdf_escape(student.admission_number)}", styles["IDText"])],
+            [Paragraph(f"Class: {_pdf_escape(str(student.classroom))} · {_pdf_escape(student.classroom.academic_year)}", styles["IDText"])],
+        ]
+        if student.date_of_birth:
+            fields.append([Paragraph(f"DOB: {student.date_of_birth.isoformat()}", styles["IDText"])])
+        if membership.school.phone:
+            fields.append([Paragraph(f"School phone: {_pdf_escape(membership.school.phone)}", styles["IDText"])])
+        card = Table(fields, colWidths=[82 * mm])
+        card.setStyle(TableStyle([
+            ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#42658A")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAF1F8")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        cards.append(card)
+    card_rows = []
+    for index in range(0, len(cards), 2):
+        card_rows.append([cards[index], cards[index + 1] if index + 1 < len(cards) else ""])
+    sheet = Table(card_rows, colWidths=[88 * mm, 88 * mm], hAlign="CENTER")
+    sheet.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=12 * mm, leftMargin=12 * mm, topMargin=12 * mm, bottomMargin=12 * mm, title="Student ID Cards")
+    doc.build([
+        Paragraph(_pdf_escape(membership.school.name) + " — Student ID Cards", styles["Title"]),
+        Paragraph(f"Generated {timezone.localdate().isoformat()} · {len(student_list)} cards", styles["Normal"]),
+        Spacer(1, 6 * mm), sheet,
+    ])
+    response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="student-id-cards.pdf"'
+    return response
 
 
 @login_required
