@@ -605,3 +605,37 @@ class AnnouncementRead(models.Model):
     def __str__(self):
         return f"{self.user} read {self.announcement}"
 
+class SchoolEvent(models.Model):
+    class Audience(models.TextChoices):
+        EVERYONE = "everyone", "Everyone"
+        PARENTS = "parents", "Parents"
+        STUDENTS = "students", "Students"
+        STAFF = "staff", "Staff"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="events")
+    title = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField(null=True, blank=True)
+    location = models.CharField(max_length=180, blank=True)
+    audience = models.CharField(max_length=12, choices=Audience.choices, default=Audience.EVERYONE)
+    is_published = models.BooleanField(default=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="school_events_created")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["starts_at", "pk"]
+        indexes = [
+            models.Index(fields=["school", "is_published", "starts_at"], name="school_event_date_idx"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.starts_at and self.ends_at and self.ends_at < self.starts_at:
+            errors["ends_at"] = "Event end must be after its start."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return self.title
+
