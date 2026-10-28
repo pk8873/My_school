@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}School Events · School Saathi{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><span class="eyebrow">SCHOOL CALENDAR</span><h1>School events</h1><p>Upcoming school activities and important dates.</p></div>
+</div>
+{% if can_manage %}
+<section class="panel mb-4">
+  <div class="panel-heading"><h2>Publish an event</h2><p>Only your school can see this event. Choose the audience carefully.</p></div>
+  <form method="post" class="row g-3">
+    {% csrf_token %}
+    <input type="hidden" name="school" value="{{ membership.school_id }}">
+    <div class="col-12"><label class="form-label" for="event-title">Event title</label><input class="form-control" id="event-title" name="title" maxlength="160" required></div>
+    <div class="col-md-6"><label class="form-label" for="event-start">Starts at</label><input class="form-control" type="datetime-local" id="event-start" name="starts_at" required></div>
+    <div class="col-md-6"><label class="form-label" for="event-end">Ends at (optional)</label><input class="form-control" type="datetime-local" id="event-end" name="ends_at"></div>
+    <div class="col-md-6"><label class="form-label" for="event-location">Location</label><input class="form-control" id="event-location" name="location" maxlength="180" placeholder="School hall, ground, or online"></div>
+    <div class="col-md-6"><label class="form-label" for="event-audience">Audience</label><select class="form-select" id="event-audience" name="audience">{% for value, label in audience_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></div>
+    <div class="col-12"><label class="form-label" for="event-description">Description</label><textarea class="form-control" id="event-description" name="description" rows="3" placeholder="Details, items to bring, or instructions"></textarea></div>
+    <div class="col-12"><button class="btn btn-primary" type="submit">Publish event</button></div>
+  </form>
+</section>
+{% endif %}
+<section class="panel">
+  <div class="panel-heading"><h2>Upcoming events</h2><p>Events are shown only to the intended audience in your school.</p></div>
+  {% for event in events %}
+  <article class="border rounded-3 p-3 mb-3">
+    <div class="d-flex flex-wrap justify-content-between gap-2"><h3 class="h5 mb-1">{{ event.title }}</h3><span class="badge bg-light text-dark">{{ event.get_audience_display }}</span></div>
+    <p class="text-secondary small mb-2">{{ event.starts_at|date:"D, d M Y · h:i A" }}{% if event.ends_at %} – {{ event.ends_at|date:"h:i A" }}{% endif %}</p>
+    {% if event.location %}<p class="mb-2"><strong>Location:</strong> {{ event.location }}</p>{% endif %}
+    {% if event.description %}<div>{{ event.description|linebreaksbr }}</div>{% endif %}
+  </article>
+  {% empty %}
+  <div class="text-center py-5"><h3 class="h5">No upcoming events listed</h3><p class="text-secondary mb-0">When your school publishes an event for your audience, it will appear here.</p></div>
+  {% endfor %}
+</section>
+{% endblock %}
