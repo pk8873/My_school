@@ -588,3 +588,20 @@ class TransferCertificate(models.Model):
     def __str__(self):
         return f"{self.certificate_number} · {self.student}"
 
+class AnnouncementRead(models.Model):
+    """Per-user read receipt for a published school announcement."""
+    announcement = models.ForeignKey(Announcement, on_delete=models.CASCADE, related_name="read_receipts")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="announcement_reads")
+    read_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["announcement", "user"], name="unique_announcement_read_user"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "read_at"], name="announce_read_user_date_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.user} read {self.announcement}"
+
