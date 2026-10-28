@@ -23,7 +23,7 @@ class UpcomingStudentBirthdaysCsvTests(TestCase):
         today = timezone.localdate()
         self.soon = Student.objects.create(
             school=self.school, classroom=self.classroom, admission_number="BDAY-001",
-            first_name="Aarav", last_name="Shah", date_of_birth=today + timedelta(days=5) if (today + timedelta(days=5)).year == today.year else date(today.year - 10, today.month, today.day),
+            first_name="Aarav", last_name="Shah", date_of_birth=date(today.year - 10, (today + timedelta(days=5)).month, (today + timedelta(days=5)).day),
         )
         self.far = Student.objects.create(
             school=self.school, classroom=self.classroom, admission_number="BDAY-002",
