@@ -127,7 +127,7 @@ def attendance(request):
         return redirect(f"{request.path}?school={membership.school_id}")
     selected_date = request.GET.get("date") or timezone.localdate().isoformat()
     rows = AttendanceRecord.objects.filter(school=membership.school, date=selected_date).select_related("student", "student__classroom")
-    return render(request, "schools/attendance.html", {"membership": membership, "form": form, "records": rows, "selected_date": selected_date})
+    return render(request, "schools/attendance.html", {"membership": membership, "form": form, "records": rows, "selected_date": selected_date, "classrooms": ClassRoom.objects.filter(school=membership.school, is_active=True).order_by("name", "section")})
 
 
 @login_required
@@ -519,11 +519,32 @@ def export_csv(request, report):
         headers = ["Admission number", "First name", "Last name", "Class", "Section", "Active", "Admission date"]
         values = ((s.admission_number, s.first_name, s.last_name, s.classroom.name, s.classroom.section, s.is_active, s.admitted_at or "") for s in rows)
     elif report == "attendance":
+        from django.utils.dateparse import parse_date
+
         require_roles(membership, ACADEMIC_ROLES)
         rows = AttendanceRecord.objects.filter(school=membership.school).select_related("student", "student__classroom")
-        date_filter = request.GET.get("date")
+        parsed_dates = {}
+        for parameter, lookup in (("date_from", "date__gte"), ("date_to", "date__lte")):
+            raw_date = request.GET.get(parameter, "").strip()
+            if raw_date:
+                parsed = parse_date(raw_date)
+                if parsed is None:
+                    return HttpResponse("Invalid date filter. Use YYYY-MM-DD.", status=400)
+                parsed_dates[parameter] = parsed
+                rows = rows.filter(**{lookup: parsed})
+        if parsed_dates.get("date_from") and parsed_dates.get("date_to") and parsed_dates["date_from"] > parsed_dates["date_to"]:
+            return HttpResponse("date_from must be on or before date_to.", status=400)
+        date_filter = request.GET.get("date", "").strip()
         if date_filter:
-            rows = rows.filter(date=date_filter)
+            parsed_day = parse_date(date_filter)
+            if parsed_day is None:
+                return HttpResponse("Invalid date filter. Use YYYY-MM-DD.", status=400)
+            rows = rows.filter(date=parsed_day)
+        classroom_id = request.GET.get("classroom", "").strip()
+        if classroom_id:
+            if not classroom_id.isdigit():
+                return HttpResponse("Invalid classroom filter.", status=400)
+            rows = rows.filter(student__classroom_id=int(classroom_id), student__classroom__school=membership.school)
         filename = "attendance.csv"
         headers = ["Date", "Admission number", "Student", "Class", "Status", "Note"]
         values = ((r.date, r.student.admission_number, str(r.student), r.student.classroom.name, r.get_status_display(), r.note) for r in rows)
