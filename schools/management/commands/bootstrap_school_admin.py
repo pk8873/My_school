@@ -52,6 +52,11 @@ class Command(BaseCommand):
                     "Set a unique strong password in Render Environment."
                 )
 
+            if school is not None and school.name != school_name:
+                raise CommandError(
+                    f"School slug '{school_slug}' already belongs to '{school.name}'. "
+                    "Choose a new unique slug; no changes were made."
+                )
             if school is None:
                 school = School.objects.create(
                     name=school_name,
@@ -59,10 +64,6 @@ class Command(BaseCommand):
                     email=email,
                     is_active=True,
                 )
-            elif school.name != school_name:
-                self.stdout.write(self.style.WARNING(
-                    f"School slug '{school_slug}' already exists; keeping its existing name."
-                ))
 
             user = User.objects.create_user(
                 username=username,
