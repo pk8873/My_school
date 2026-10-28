@@ -1392,6 +1392,8 @@ def staff_attendance(request):
     try:
         selected_date = date.fromisoformat(raw_date)
     except ValueError:
+        if request.method == "POST":
+            return HttpResponse("Enter a valid attendance date in YYYY-MM-DD format.", status=400)
         selected_date = timezone.localdate()
         messages.error(request, "Enter a valid attendance date.")
 
