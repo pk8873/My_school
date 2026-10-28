@@ -302,6 +302,126 @@ def export_csv(request, report):
     return response
 
 
+def _pdf_escape(value):
+    from xml.sax.saxutils import escape
+    return escape(str(value if value is not None else "—"))
+
+
+def _build_pdf(title, subtitle, rows, *, filename):
+    """Build a small, printable PDF report using server-side trusted data."""
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=15 * mm, leftMargin=15 * mm,
+        topMargin=16 * mm, bottomMargin=16 * mm, title=title,
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="ReportTitle", parent=styles["Title"], alignment=TA_CENTER, textColor=colors.HexColor("#183153"), spaceAfter=8))
+    story = [Paragraph(_pdf_escape(title), styles["ReportTitle"]), Paragraph(_pdf_escape(subtitle), styles["Normal"]), Spacer(1, 10 * mm)]
+    table_data = [[Paragraph(f"<b>{_pdf_escape(cell)}</b>", styles["BodyText"]) for cell in rows[0]]]
+    for row in rows[1:]:
+        table_data.append([Paragraph(_pdf_escape(cell), styles["BodyText"]) for cell in row])
+    table = Table(table_data, repeatRows=1, hAlign="LEFT")
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef7")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#183153")),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#cbd5e1")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(table)
+    doc.build(story)
+    response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@login_required
+@require_GET
+def student_report_card_pdf(request, student_id):
+    """Download a school-scoped report card after record-level authorization."""
+    membership = get_membership(request)
+    student = Student.objects.filter(pk=student_id, school=membership.school, is_active=True).select_related("classroom").first()
+    if student is None:
+        raise Http404("Student not found.")
+    if membership.role in {Membership.Role.PARENT, Membership.Role.STUDENT}:
+        if membership.role == Membership.Role.PARENT:
+            allowed = ParentStudentLink.objects.filter(
+                parent=request.user, student=student, is_active=True, can_view_results=True
+            ).exists()
+        else:
+            allowed = student.portal_user_id == request.user.pk
+        if not allowed:
+            raise PermissionDenied("You cannot view this student's report card.")
+    elif membership.role not in ACADEMIC_ROLES:
+        raise PermissionDenied("Your school role cannot download report cards.")
+
+    from .models import ExamResult
+    results = ExamResult.objects.filter(school=membership.school, student=student).select_related("exam").order_by("-exam__exam_date", "exam__title")
+    table_rows = [["Exam", "Date", "Marks", "Percent", "Remarks"]]
+    for result in results:
+        table_rows.append([
+            result.exam.title, result.exam.exam_date.isoformat(),
+            f"{result.marks_obtained} / {result.exam.max_marks}",
+            f"{result.percentage}%", result.remarks or "—",
+        ])
+    if len(table_rows) == 1:
+        table_rows.append(["No results recorded", "—", "—", "—", "—"])
+    subtitle = f"School: {membership.school.name} | Student: {student.first_name} {student.last_name} | Admission: {student.admission_number} | Class: {student.classroom}"
+    return _build_pdf("Student Report Card", subtitle, table_rows, filename=f"report-card-{student.admission_number}.pdf")
+
+
+@login_required
+@require_GET
+def student_fee_statement_pdf(request, student_id):
+    """Download a school-scoped fee statement; it is not a payment receipt."""
+    membership = get_membership(request)
+    student = Student.objects.filter(pk=student_id, school=membership.school, is_active=True).select_related("classroom").first()
+    if student is None:
+        raise Http404("Student not found.")
+    if membership.role in FEE_ROLES:
+        allowed = True
+    elif membership.role == Membership.Role.PARENT:
+        allowed = ParentStudentLink.objects.filter(
+            parent=request.user, student=student, is_active=True, can_view_fees=True
+        ).exists()
+    elif membership.role == Membership.Role.STUDENT:
+        allowed = student.portal_user_id == request.user.pk
+    else:
+        allowed = False
+    if not allowed:
+        raise PermissionDenied("You cannot view this student's fee statement.")
+
+    rows = FeeRecord.objects.filter(school=membership.school, student=student).order_by("due_date", "title")
+    table_rows = [["Fee head", "Due date", "Amount", "Paid", "Balance", "Status"]]
+    total_amount = total_paid = total_balance = 0
+    for fee in rows:
+        table_rows.append([
+            fee.title, fee.due_date.isoformat() if fee.due_date else "—",
+            f"INR {fee.amount:.2f}", f"INR {fee.paid_amount:.2f}",
+            f"INR {fee.balance:.2f}", fee.get_status_display(),
+        ])
+        total_amount += fee.amount
+        total_paid += fee.paid_amount
+        total_balance += fee.balance
+    if len(table_rows) == 1:
+        table_rows.append(["No fee records", "—", "INR 0.00", "INR 0.00", "INR 0.00", "—"])
+    table_rows.append(["TOTAL", "—", f"INR {total_amount:.2f}", f"INR {total_paid:.2f}", f"INR {total_balance:.2f}", ""])
+    subtitle = f"School: {membership.school.name} | Student: {student.first_name} {student.last_name} | Admission: {student.admission_number} | Generated: {timezone.localdate().isoformat()} | Statement only — not proof of payment"
+    return _build_pdf("Student Fee Statement", subtitle, table_rows, filename=f"fee-statement-{student.admission_number}.pdf")
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def platform_admin(request):
