@@ -330,3 +330,14 @@ class HomeworkFeedbackForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs["class"] = ("form-select" if isinstance(field.widget, forms.Select) else "form-control")
+
+
+class BulkAttendanceSelectionForm(forms.Form):
+    classroom = forms.ModelChoiceField(queryset=ClassRoom.objects.none(), label="Class")
+    date = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}))
+
+    def __init__(self, *args, school, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["classroom"].queryset = ClassRoom.objects.filter(school=school, is_active=True)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = "form-select" if isinstance(field.widget, forms.Select) else "form-control"
