@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from .models import AttendanceRecord, ClassRoom, FeeRecord, Student
+from .models import AttendanceRecord, ClassRoom, FeeRecord, FeePayment, Student
 
 
 class BootstrapModelForm(forms.ModelForm):
@@ -50,6 +50,18 @@ class FeeRecordForm(BootstrapModelForm):
         self.fields["student"].queryset = Student.objects.filter(school=school, is_active=True)
         self.fields["amount"].widget.attrs.update({"min": "0", "step": "0.01"})
         self.fields["paid_amount"].widget.attrs.update({"min": "0", "step": "0.01"})
+
+class FeePaymentForm(BootstrapModelForm):
+    class Meta:
+        model = FeePayment
+        fields = ["amount", "payment_date", "method", "reference", "note"]
+        widgets = {"payment_date": forms.DateInput(attrs={"type": "date"})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["amount"].widget.attrs.update({"min": "0.01", "step": "0.01"})
+        self.fields["reference"].help_text = "Optional receipt/transaction reference. This app does not verify online transactions."
+
 
 from .models import Announcement, Exam, ExamResult, Homework
 
