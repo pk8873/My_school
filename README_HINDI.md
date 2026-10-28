@@ -10,7 +10,7 @@
 - School admin/principal/teacher के लिए daily attendance entry और date-wise register.
 - School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance.
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection.
-- Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation.
+- Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation. School admins/principals manage the schedule; teachers see only assigned slots; students see their linked class; parents see linked children’s classes.
 - Tenant-scoped CSV exports for student registers, attendance (date-filterable) and fee ledger, protected by role checks.
 - Downloadable PDF student report cards and fee statements, with school isolation and parent/student record-level permissions. Fee statement PDF is not a payment receipt.
 - Super Admin-only school onboarding that creates a tenant, its initial school-admin login and subscription plan metadata in one transaction; platform admin can edit plan/status/student limits (billing is not connected).
@@ -28,7 +28,7 @@
 
 ## अभी बाकी महत्वपूर्ण modules
 - Automated recurring billing, payment provider integration/webhooks and subscription lifecycle enforcement (Super Admin onboarding, plan metadata and student-limit checks are implemented; paid billing is not connected).
-- Parent/student portal foundations: linked children’s attendance and fee summaries, linked student profile attendance/fee summaries, and academic updates. PDF reports, attendance analytics and homework submissions remain pending.
+- Parent/student portal foundations: linked children’s attendance and fee summaries, linked student profile attendance/fee summaries, academic updates, class timetable and homework submissions.
 - Payroll, staff attendance and staff self-service. Basic school-scoped account creation and staff/family directory are implemented.
 - Bulk marks entry, homework file/photo uploads, push notifications and homework revision history. Text-based homework submission and teacher feedback are implemented.
 - Attendance bulk marking, edit/correction audit trail, PDF exports and advanced report filters.
