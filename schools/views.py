@@ -131,6 +131,78 @@ def attendance(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+def attendance_bulk(request):
+    """Mark or update attendance for all active students in one school class."""
+    from datetime import date
+    from django.db import transaction
+    from .forms import BulkAttendanceSelectionForm
+    from .models import AttendanceRecord
+
+    membership = get_membership(request)
+    require_roles(membership, ACADEMIC_ROLES)
+    selected_date = request.GET.get("date") or timezone.localdate().isoformat()
+    initial = {"date": selected_date}
+    if request.method == "POST":
+        form = BulkAttendanceSelectionForm(request.POST, school=membership.school)
+    else:
+        form = BulkAttendanceSelectionForm(request.GET or None, school=membership.school, initial=initial)
+
+    students = Student.objects.none()
+    existing = {}
+    if request.method == "POST" and form.is_valid():
+        classroom = form.cleaned_data["classroom"]
+        selected_date = form.cleaned_data["date"].isoformat()
+        students = Student.objects.filter(
+            school=membership.school, classroom=classroom, is_active=True
+        ).order_by("first_name", "last_name")
+        valid_statuses = {choice[0] for choice in AttendanceRecord.Status.choices}
+        invalid = any(
+            request.POST.get(f"status_{student.pk}") not in valid_statuses
+            for student in students
+        )
+        if not students.exists():
+            messages.error(request, "There are no active students in this class.")
+        elif invalid:
+            messages.error(request, "Choose a valid attendance status for every student.")
+        else:
+            with transaction.atomic():
+                for student in students:
+                    status = request.POST[f"status_{student.pk}"]
+                    note = request.POST.get(f"note_{student.pk}", "").strip()[:250]
+                    AttendanceRecord.objects.update_or_create(
+                        school=membership.school, student=student, date=form.cleaned_data["date"],
+                        defaults={"status": status, "note": note, "marked_by": request.user},
+                    )
+            messages.success(request, f"Attendance saved for {students.count()} students on {selected_date}.")
+            return redirect(f"/attendance/bulk/?school={membership.school_id}&classroom={classroom.pk}&date={selected_date}")
+    elif request.method == "GET" and form.is_valid():
+        classroom = form.cleaned_data["classroom"]
+        selected_date = form.cleaned_data["date"].isoformat()
+        students = Student.objects.filter(
+            school=membership.school, classroom=classroom, is_active=True
+        ).order_by("first_name", "last_name")
+    else:
+        form = BulkAttendanceSelectionForm(
+            school=membership.school,
+            initial={"date": selected_date, "classroom": request.GET.get("classroom") or None},
+        )
+
+    if students.exists():
+        existing = {
+            row.student_id: row
+            for row in AttendanceRecord.objects.filter(
+                school=membership.school, student__in=students, date=selected_date
+            )
+        }
+    return render(request, "schools/attendance_bulk.html", {
+        "membership": membership, "form": form, "students": students,
+        "existing": existing, "selected_date": selected_date,
+        "status_choices": AttendanceRecord.Status.choices,
+    })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
 def fees(request):
     membership = get_membership(request)
     require_roles(membership, FEE_ROLES)
