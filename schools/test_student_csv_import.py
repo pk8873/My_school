@@ -59,4 +59,4 @@ class StudentCsvImportTests(TestCase):
         response = self.upload("admission_number,first_name,last_name,class_name,section,academic_year,date_of_birth,admitted_at,is_active\nCSV-005,Asha,Devi,Class 4,A,2026-2027,,,true\nCSV-006,Ravi,Kumar,Class 4,A,2026-2027,,,true\n")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Student.objects.filter(school=self.school).count(), 0)
-        self.assertContains(response, "exceed this school's plan limit")
+        self.assertContains(response, "plan limit of 1 students")
