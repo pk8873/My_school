@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
-from .models import AttendanceRecord, ClassRoom, FeeRecord, Membership, Student, School, SchoolSubscription, ParentStudentLink
+from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, Membership, Student, School, SchoolSubscription, ParentStudentLink
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -171,10 +171,22 @@ def attendance_bulk(request):
                 for student in students:
                     status = request.POST[f"status_{student.pk}"]
                     note = request.POST.get(f"note_{student.pk}", "").strip()[:250]
-                    AttendanceRecord.objects.update_or_create(
-                        school=membership.school, student=student, date=form.cleaned_data["date"],
-                        defaults={"status": status, "note": note, "marked_by": request.user},
-                    )
+                    record = AttendanceRecord.objects.filter(
+                        school=membership.school, student=student, date=form.cleaned_data["date"]
+                    ).first()
+                    old_status = record.status if record else ""
+                    old_note = record.note if record else ""
+                    if record is None or old_status != status or old_note != note:
+                        record, _created = AttendanceRecord.objects.update_or_create(
+                            school=membership.school, student=student, date=form.cleaned_data["date"],
+                            defaults={"status": status, "note": note, "marked_by": request.user},
+                        )
+                        AttendanceChangeLog.objects.create(
+                            school=membership.school, attendance=record,
+                            student_name=str(student), admission_number=student.admission_number,
+                            attendance_date=form.cleaned_data["date"], old_status=old_status,
+                            new_status=status, old_note=old_note, new_note=note, changed_by=request.user,
+                        )
             messages.success(request, f"Attendance saved for {students.count()} students on {selected_date}.")
             return redirect(f"/attendance/bulk/?school={membership.school_id}&classroom={classroom.pk}&date={selected_date}")
     elif request.method == "GET" and form.is_valid():
@@ -202,6 +214,24 @@ def attendance_bulk(request):
         "membership": membership, "form": form, "students": students, "student_rows": student_rows,
         "existing": existing, "selected_date": selected_date,
         "status_choices": AttendanceRecord.Status.choices,
+    })
+
+
+@login_required
+@require_GET
+def attendance_history(request):
+    """Show a school-scoped audit trail for attendance entries and corrections."""
+    membership = get_membership(request)
+    require_roles(membership, ACADEMIC_ROLES)
+    rows = AttendanceChangeLog.objects.filter(school=membership.school).select_related("changed_by", "attendance")
+    selected_date = request.GET.get("date", "").strip()
+    if selected_date:
+        rows = rows.filter(attendance_date=selected_date)
+    query = request.GET.get("q", "").strip()
+    if query:
+        rows = rows.filter(Q(student_name__icontains=query) | Q(admission_number__icontains=query))
+    return render(request, "schools/attendance_history.html", {
+        "membership": membership, "history": rows[:250], "selected_date": selected_date, "query": query,
     })
 
 
