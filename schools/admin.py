@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import AttendanceRecord, ClassRoom, FeeRecord, Membership, ParentStudentLink, School, Student
+from .models import AttendanceRecord, ClassRoom, FeeRecord, FeePayment, Membership, ParentStudentLink, School, Student
 
 
 @admin.register(School)
@@ -109,3 +109,11 @@ class AttendanceChangeLogAdmin(admin.ModelAdmin):
     list_filter = ("school", "attendance_date", "old_status", "new_status")
     search_fields = ("student_name", "admission_number", "changed_by__username")
     readonly_fields = ("school", "attendance", "student_name", "admission_number", "attendance_date", "old_status", "new_status", "old_note", "new_note", "changed_by", "changed_at")
+
+
+@admin.register(FeePayment)
+class FeePaymentAdmin(admin.ModelAdmin):
+    list_display = ("fee_record", "school", "payment_date", "amount", "method", "recorded_by")
+    list_filter = ("school", "method", "payment_date")
+    search_fields = ("fee_record__student__first_name", "fee_record__student__last_name", "fee_record__student__admission_number", "reference")
+    readonly_fields = ("created_at",)
