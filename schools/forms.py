@@ -305,3 +305,28 @@ class SubscriptionUpdateForm(BootstrapModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["student_limit"].widget.attrs.update({"min": "1"})
+
+
+
+class HomeworkSubmissionForm(forms.ModelForm):
+    class Meta:
+        from .models import HomeworkSubmission
+        model = HomeworkSubmission
+        fields = ["submission_text"]
+        widgets = {"submission_text": forms.Textarea(attrs={"rows": 3, "placeholder": "Write your answer or paste your work here..."})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["submission_text"].widget.attrs["class"] = "form-control"
+
+
+class HomeworkFeedbackForm(forms.ModelForm):
+    class Meta:
+        from .models import HomeworkSubmission
+        model = HomeworkSubmission
+        fields = ["status", "teacher_feedback"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["class"] = ("form-select" if isinstance(field.widget, forms.Select) else "form-control")
