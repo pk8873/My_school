@@ -55,7 +55,7 @@ class StudentCsvImportTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_student_limit_is_enforced(self):
-        SchoolSubscription.objects.create(school=self.school, plan=SchoolSubscription.Plan.BASIC, status=SchoolSubscription.Status.ACTIVE, student_limit=1)
+        SchoolSubscription.objects.create(school=self.school, plan=SchoolSubscription.Plan.STARTER, status=SchoolSubscription.Status.ACTIVE, student_limit=1)
         response = self.upload("admission_number,first_name,last_name,class_name,section,academic_year,date_of_birth,admitted_at,is_active\nCSV-005,Asha,Devi,Class 4,A,2026-2027,,,true\nCSV-006,Ravi,Kumar,Class 4,A,2026-2027,,,true\n")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Student.objects.filter(school=self.school).count(), 0)
