@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import F, Q, Sum
 from django.http import Http404, HttpResponse
@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
-from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink
+from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -1307,4 +1307,73 @@ def import_students_csv(request):
                 error = "Could not read this file as a UTF-8 CSV. Save it as CSV UTF-8 and try again."
     return render(request, "schools/student_import.html", {
         "membership": membership, "error": error, "required_headers": sorted(required_headers),
+    })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def staff_leave(request):
+    """Staff leave self-service; only school management can review requests."""
+    from datetime import date
+
+    membership = get_membership(request)
+    require_roles(membership, STAFF_ROLES)
+    is_manager = membership.role in MANAGEMENT_ROLES
+
+    if request.method == "POST":
+        action = request.POST.get("action", "request_leave")
+        if action == "request_leave":
+            try:
+                start_date = date.fromisoformat(request.POST.get("start_date", "").strip())
+                end_date = date.fromisoformat(request.POST.get("end_date", "").strip())
+            except ValueError:
+                messages.error(request, "Enter valid leave dates.")
+            else:
+                reason = request.POST.get("reason", "").strip()
+                leave = StaffLeaveRequest(
+                    school=membership.school, requester=request.user,
+                    start_date=start_date, end_date=end_date, reason=reason,
+                )
+                try:
+                    leave.full_clean()
+                except ValidationError as exc:
+                    for field_errors in exc.message_dict.values():
+                        for error in field_errors:
+                            messages.error(request, error)
+                else:
+                    if not reason:
+                        messages.error(request, "Please enter a reason for leave.")
+                    else:
+                        leave.save()
+                        messages.success(request, "Leave request submitted.")
+                        return redirect(f"{request.path}?school={membership.school_id}")
+        elif action == "review_leave":
+            if not is_manager:
+                raise PermissionDenied("Only school admins and principals can review leave requests.")
+            request_id = request.POST.get("request_id", "").strip()
+            decision = request.POST.get("decision", "").strip()
+            leave = StaffLeaveRequest.objects.filter(pk=request_id, school=membership.school).first()
+            if leave is None:
+                raise Http404("Leave request not found in this school.")
+            if leave.status != StaffLeaveRequest.Status.PENDING:
+                messages.error(request, "Only pending leave requests can be reviewed.")
+            elif decision not in {StaffLeaveRequest.Status.APPROVED, StaffLeaveRequest.Status.REJECTED}:
+                messages.error(request, "Choose approve or reject.")
+            else:
+                leave.status = decision
+                leave.review_note = request.POST.get("review_note", "").strip()[:500]
+                leave.reviewed_by = request.user
+                leave.reviewed_at = timezone.now()
+                leave.full_clean()
+                leave.save(update_fields=["status", "review_note", "reviewed_by", "reviewed_at", "updated_at"])
+                messages.success(request, f"Leave request {leave.get_status_display().lower()}.")
+                return redirect(f"{request.path}?school={membership.school_id}")
+        else:
+            raise Http404("Unknown leave action.")
+
+    rows = StaffLeaveRequest.objects.filter(school=membership.school).select_related("requester", "reviewed_by")
+    if not is_manager:
+        rows = rows.filter(requester=request.user)
+    return render(request, "schools/staff_leave.html", {
+        "membership": membership, "is_manager": is_manager, "leave_requests": rows[:200],
     })
