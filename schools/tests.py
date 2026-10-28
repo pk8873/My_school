@@ -493,3 +493,42 @@ class TenantBoundaryTests(TestCase):
         self.assertEqual(subscription.plan, "standard")
         self.assertEqual(subscription.student_limit, 250)
         self.assertEqual(subscription.status, "active")
+
+
+    def test_attendance_correction_is_recorded_in_history(self):
+        from .models import AttendanceChangeLog
+        self.client.force_login(self.user_a)
+        self.client.post("/attendance/bulk/", {
+            "school": str(self.a.pk), "classroom": str(self.ca.pk), "date": "2026-10-28",
+            f"status_{self.sa.pk}": "absent", f"note_{self.sa.pk}": "First entry",
+        })
+        self.client.post("/attendance/bulk/", {
+            "school": str(self.a.pk), "classroom": str(self.ca.pk), "date": "2026-10-28",
+            f"status_{self.sa.pk}": "present", f"note_{self.sa.pk}": "Corrected entry",
+        })
+        self.assertEqual(AttendanceChangeLog.objects.filter(school=self.a, admission_number="A-001").count(), 2)
+        latest = AttendanceChangeLog.objects.filter(school=self.a, admission_number="A-001").order_by("-changed_at", "-pk").first()
+        self.assertEqual(latest.old_status, AttendanceRecord.Status.ABSENT)
+        self.assertEqual(latest.new_status, AttendanceRecord.Status.PRESENT)
+        self.assertEqual(latest.changed_by, self.user_a)
+        self.assertFalse(AttendanceChangeLog.objects.filter(school=self.b).exists())
+
+    def test_attendance_history_is_school_scoped_and_role_protected(self):
+        from .models import AttendanceChangeLog
+        AttendanceChangeLog.objects.create(
+            school=self.a, student_name="Synthetic Alpha", admission_number="A-001",
+            attendance_date="2026-10-28", old_status="", new_status="present", changed_by=self.user_a,
+        )
+        AttendanceChangeLog.objects.create(
+            school=self.b, student_name="Synthetic Beta", admission_number="B-001",
+            attendance_date="2026-10-28", old_status="", new_status="absent", changed_by=self.user_b,
+        )
+        self.client.force_login(self.user_a)
+        response = self.client.get("/attendance/history/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Synthetic Alpha")
+        self.assertNotContains(response, "Synthetic Beta")
+        parent = User.objects.create_user(username="synthetic_history_parent", password="synthetic-test-pass-123")
+        Membership.objects.create(user=parent, school=self.a, role=Membership.Role.PARENT)
+        self.client.force_login(parent)
+        self.assertEqual(self.client.get("/attendance/history/").status_code, 403)
