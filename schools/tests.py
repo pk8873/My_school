@@ -359,6 +359,70 @@ class TenantBoundaryTests(TestCase):
         self.assertEqual(submission.graded_by, teacher)
         self.assertIsNotNone(submission.graded_at)
 
+
+    def test_student_can_view_only_own_class_timetable(self):
+        from .models import TimetableSlot
+        student_user = User.objects.create_user(username="synthetic_timetable_student", password="synthetic-test-pass-123")
+        Membership.objects.create(user=student_user, school=self.a, role=Membership.Role.STUDENT)
+        self.sa.portal_user = student_user
+        self.sa.save(update_fields=["portal_user"])
+        other_class = ClassRoom.objects.create(school=self.a, name="Class 8", section="B", academic_year="2026-2027")
+        TimetableSlot.objects.create(
+            school=self.a, classroom=self.ca, subject="Synthetic Maths", weekday="mon",
+            start_time="09:00", end_time="09:45",
+        )
+        TimetableSlot.objects.create(
+            school=self.a, classroom=other_class, subject="Private Class Subject", weekday="mon",
+            start_time="10:00", end_time="10:45",
+        )
+        self.client.force_login(student_user)
+        response = self.client.get(f"/timetable/?school={self.a.pk}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Synthetic Maths")
+        self.assertNotContains(response, "Private Class Subject")
+        self.assertNotContains(response, "Add timetable slot")
+
+    def test_parent_can_view_linked_child_class_timetable_only(self):
+        from .models import TimetableSlot
+        parent = User.objects.create_user(username="synthetic_timetable_parent", password="synthetic-test-pass-123")
+        Membership.objects.create(user=parent, school=self.a, role=Membership.Role.PARENT)
+        ParentStudentLink.objects.create(parent=parent, student=self.sa, is_active=True)
+        other_class = ClassRoom.objects.create(school=self.a, name="Class 9", section="C", academic_year="2026-2027")
+        TimetableSlot.objects.create(
+            school=self.a, classroom=self.ca, subject="Linked Child Science", weekday="tue",
+            start_time="11:00", end_time="11:45",
+        )
+        TimetableSlot.objects.create(
+            school=self.a, classroom=other_class, subject="Unlinked Class Science", weekday="tue",
+            start_time="12:00", end_time="12:45",
+        )
+        self.client.force_login(parent)
+        response = self.client.get(f"/timetable/?school={self.a.pk}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Linked Child Science")
+        self.assertNotContains(response, "Unlinked Class Science")
+        self.assertNotContains(response, "Add timetable slot")
+
+    def test_teacher_timetable_shows_only_assigned_slots(self):
+        from .models import TimetableSlot
+        teacher = User.objects.create_user(username="synthetic_assigned_teacher", password="synthetic-test-pass-123")
+        Membership.objects.create(user=teacher, school=self.a, role=Membership.Role.TEACHER)
+        TimetableSlot.objects.create(
+            school=self.a, classroom=self.ca, subject="My Assigned Subject", teacher=teacher,
+            weekday="wed", start_time="09:00", end_time="09:45",
+        )
+        TimetableSlot.objects.create(
+            school=self.a, classroom=self.ca, subject="Another Teacher Subject",
+            weekday="wed", start_time="10:00", end_time="10:45",
+        )
+        self.client.force_login(teacher)
+        response = self.client.get(f"/timetable/?school={self.a.pk}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "My Assigned Subject")
+        self.assertNotContains(response, "Another Teacher Subject")
+        self.assertNotContains(response, "Add timetable slot")
+
+
     def test_seed_demo_data_is_repeatable_and_synthetic(self):
         from django.core.management import call_command
         from django.test import override_settings
