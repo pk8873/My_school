@@ -548,6 +548,44 @@ def export_csv(request, report):
         filename = "attendance.csv"
         headers = ["Date", "Admission number", "Student", "Class", "Status", "Note"]
         values = ((r.date, r.student.admission_number, str(r.student), r.student.classroom.name, r.get_status_display(), r.note) for r in rows)
+    elif report == "exam-results":
+        from .models import ExamResult
+        from django.utils.dateparse import parse_date
+
+        require_roles(membership, ACADEMIC_ROLES)
+        rows = ExamResult.objects.filter(
+            school=membership.school, exam__school=membership.school, student__school=membership.school,
+        ).select_related("exam", "student", "student__classroom").order_by("exam__exam_date", "exam__title", "student__first_name", "student__last_name")
+        exam_id = request.GET.get("exam", "").strip()
+        if exam_id:
+            if not exam_id.isdigit():
+                return HttpResponse("Invalid exam filter.", status=400)
+            rows = rows.filter(exam_id=int(exam_id))
+        classroom_id = request.GET.get("classroom", "").strip()
+        if classroom_id:
+            if not classroom_id.isdigit():
+                return HttpResponse("Invalid classroom filter.", status=400)
+            rows = rows.filter(student__classroom_id=int(classroom_id), student__classroom__school=membership.school)
+        date_from = request.GET.get("date_from", "").strip()
+        date_to = request.GET.get("date_to", "").strip()
+        parsed_dates = {}
+        for parameter, lookup in (("date_from", "exam__exam_date__gte"), ("date_to", "exam__exam_date__lte")):
+            raw_date = request.GET.get(parameter, "").strip()
+            if raw_date:
+                parsed = parse_date(raw_date)
+                if parsed is None:
+                    return HttpResponse("Invalid date filter. Use YYYY-MM-DD.", status=400)
+                parsed_dates[parameter] = parsed
+                rows = rows.filter(**{lookup: parsed})
+        if parsed_dates.get("date_from") and parsed_dates.get("date_to") and parsed_dates["date_from"] > parsed_dates["date_to"]:
+            return HttpResponse("date_from must be on or before date_to.", status=400)
+        filename = "exam-results.csv"
+        headers = ["Exam", "Exam date", "Admission number", "Student", "Class", "Section", "Marks obtained", "Maximum marks", "Percentage", "Remarks"]
+        values = ((
+            r.exam.title, r.exam.exam_date, r.student.admission_number, str(r.student),
+            r.student.classroom.name, r.student.classroom.section, r.marks_obtained,
+            r.exam.max_marks, r.percentage, r.remarks,
+        ) for r in rows)
     elif report == "fees":
         require_roles(membership, FEE_ROLES)
         rows = FeeRecord.objects.filter(school=membership.school).select_related("student")
