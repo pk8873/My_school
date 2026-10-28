@@ -424,3 +424,47 @@ class SchoolSubscription(models.Model):
 
     def __str__(self):
         return f"{self.school.name} · {self.get_plan_display()} · {self.get_status_display()}"
+
+
+class StaffLeaveRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="staff_leave_requests")
+    requester = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="staff_leave_requests")
+    start_date = models.DateField()
+    end_date = models.DateField()
+    reason = models.TextField(max_length=2000)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    review_note = models.CharField(max_length=500, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_staff_leave_requests")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["school", "status", "start_date"], name="staffleave_school_status_idx"),
+            models.Index(fields=["requester", "status"], name="staffleave_user_status_idx"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            errors["end_date"] = "End date must be on or after the start date."
+        if self.requester_id and self.school_id and not self.requester.school_memberships.filter(
+            school_id=self.school_id, is_active=True
+        ).exists():
+            errors["requester"] = "Requester must have an active membership in this school."
+        if self.reviewed_by_id and self.school_id and not self.reviewed_by.school_memberships.filter(
+            school_id=self.school_id, is_active=True, role__in=[Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL]
+        ).exists():
+            errors["reviewed_by"] = "Reviewer must be an active school admin or principal."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.requester} · {self.start_date} to {self.end_date} · {self.get_status_display()}"
