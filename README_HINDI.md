@@ -9,7 +9,7 @@
 - School admin/principal के लिए class creation और student admission/search.
 - School admin/principal/teacher के लिए daily attendance entry, date-wise register और class-wise bulk attendance marking; bulk save उसी class/date के मौजूदा records को update करता है. Bulk attendance creation/correction changes are recorded in a school-scoped audit history with old/new status and notes.
 - School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance, student/admission number/fee-head search, payment-status filter और unpaid balance वाले past-due records का overdue filter (school-scoped).
-- Individual manual fee payment history: payment date, amount, method, reference, note और recorded-by; each payment updates the outstanding balance inside a database transaction and cannot exceed the remaining balance. This is a manual ledger, not a payment gateway; older paid amounts entered directly into the fee ledger do not automatically become individual payment rows.
+- Individual manual fee payment history with per-entry downloadable PDF acknowledgements (payment date, amount, method, reference, note and recorded-by). Receipts are school-scoped and role-protected, and state that they acknowledge a manual ledger entry rather than verify bank/online payment. Each new entry updates the outstanding balance inside a transaction and cannot exceed the remaining balance.
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection.
 - Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation. School admins/principals manage the schedule; teachers see only assigned slots; students see their linked class; parents see linked children’s classes.
 - Tenant-scoped CSV exports for student registers, attendance (date-filterable) and fee ledger, protected by role checks.
@@ -19,7 +19,7 @@
 - Subscription plan/status metadata and student admission limits; this is not payment processing or automated subscription billing.
 - Class-wise or school-wide homework assignments with due dates and publish control.
 - Student text-based homework submission, teacher review status and written feedback, with school-scoped authorization.
-- Repeatable synthetic demo-data command for a demo school, accounts, students, attendance, fees, exam results, homework, announcement and timetable. The command refuses to run with DEBUG=False.
+- Repeatable synthetic demo-data command for a demo school, accounts, students, attendance, fees and four sample individual payment entries, exam results, homework, announcement and timetable. Demo payment rows sum to the sample paid amounts, are clearly marked synthetic, and the command refuses to run with DEBUG=False.
 - Audience-based school announcements for parents, students, staff or everyone.
 - Combined Academics workspace with responsive cards, accessible form labels, helpful empty states and role-aware navigation.
 - Attendance और fees के लिए Django Admin registration.
@@ -33,7 +33,7 @@
 - Payroll, staff attendance and staff self-service. Basic school-scoped account creation and staff/family directory are implemented.
 - Bulk marks entry, homework file/photo uploads, push notifications and homework revision history. Text-based homework submission and teacher feedback are implemented.
 - Attendance history audit trail bulk attendance updates के लिए शामिल है; attendance PDF exports और advanced report filters अभी बाकी हैं.
-- Fee discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks. Manual fee acknowledgement PDF and individual manual payment history are implemented; gateway verification is not.
+- Fee discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks. Individual manual payment PDF acknowledgements and payment history are implemented; gateway verification is not.
 - Full CRUD edit/delete flows, password reset/email delivery, audit logs, backups/restore and monitoring.
 - Dedicated school-scoped Django admin permissions, deployment review, accessibility review and end-to-end production tests.
 
