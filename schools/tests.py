@@ -637,3 +637,37 @@ class TenantBoundaryTests(TestCase):
         self.client.force_login(self.user_a)
         self.assertEqual(self.client.get(f"/fees/{zero_paid.pk}/receipt.pdf").status_code, 404)
         self.assertEqual(self.client.get(f"/fees/{other_school_fee.pk}/receipt.pdf").status_code, 404)
+
+
+
+class SchoolDataExportTests(TestCase):
+    def test_management_user_can_download_school_scoped_csv_bundle(self):
+        import io
+        import zipfile
+
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/data-export.zip?school={self.a.pk}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/zip")
+        self.assertIn("no-store", response["Cache-Control"])
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            self.assertIn("manifest.json", archive.namelist())
+            self.assertIn("students.csv", archive.namelist())
+            student_csv = archive.read("students.csv").decode("utf-8-sig")
+            self.assertIn("A-001", student_csv)
+            self.assertNotIn("B-001", student_csv)
+            manifest = archive.read("manifest.json").decode("utf-8")
+            self.assertIn("Alpha Synthetic School", manifest)
+            self.assertIn("not a full database backup", manifest)
+
+    def test_teacher_cannot_download_school_data_bundle(self):
+        teacher = User.objects.create_user(username="alpha_teacher_export", password="synthetic-test-pass-123")
+        Membership.objects.create(user=teacher, school=self.a, role=Membership.Role.TEACHER)
+        self.client.force_login(teacher)
+        response = self.client.get(f"/data-export.zip?school={self.a.pk}")
+        self.assertEqual(response.status_code, 403)
+
+    def test_school_export_requires_login(self):
+        response = self.client.get(f"/data-export.zip?school={self.a.pk}")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response.url)
