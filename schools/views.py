@@ -319,11 +319,13 @@ def homework_review(request, submission_id):
 @require_http_methods(["GET", "POST"])
 def timetable(request):
     membership = get_membership(request)
-    require_roles(membership, ACADEMIC_ROLES)
+    role = membership.role
+    allowed_view_roles = ACADEMIC_ROLES | {Membership.Role.PARENT, Membership.Role.STUDENT}
+    require_roles(membership, allowed_view_roles)
     from .forms import TimetableSlotForm
     from .models import TimetableSlot
 
-    can_edit = membership.role in MANAGEMENT_ROLES
+    can_edit = role in MANAGEMENT_ROLES
     form = TimetableSlotForm(request.POST or None, school=membership.school) if can_edit else None
     if request.method == "POST":
         if not can_edit:
@@ -336,10 +338,26 @@ def timetable(request):
             messages.success(request, "Timetable slot saved.")
             return redirect(f"{request.path}?school={membership.school_id}")
     slots = TimetableSlot.objects.filter(school=membership.school, is_active=True).select_related("classroom", "teacher")
+    if role == Membership.Role.TEACHER:
+        slots = slots.filter(teacher=request.user)
+    elif role == Membership.Role.STUDENT:
+        own_student = Student.objects.filter(
+            school=membership.school, portal_user=request.user, is_active=True
+        ).first()
+        if own_student is None:
+            slots = slots.none()
+        else:
+            slots = slots.filter(classroom_id=own_student.classroom_id)
+    elif role == Membership.Role.PARENT:
+        child_class_ids = Student.objects.filter(
+            school=membership.school, is_active=True,
+            parent_links__parent=request.user, parent_links__is_active=True,
+        ).values_list("classroom_id", flat=True).distinct()
+        slots = slots.filter(classroom_id__in=child_class_ids)
     weekday_order = {key: i for i, (key, label) in enumerate(TimetableSlot.Weekday.choices)}
     slots = sorted(slots, key=lambda slot: (weekday_order[slot.weekday], slot.start_time, slot.classroom.name))
     return render(request, "schools/timetable.html", {
-        "membership": membership, "form": form, "can_edit": can_edit, "slots": slots,
+        "membership": membership, "role": role, "form": form, "can_edit": can_edit, "slots": slots,
         "weekdays": TimetableSlot.Weekday.choices,
         "weekday_groups": [(key, label, [slot for slot in slots if slot.weekday == key]) for key, label in TimetableSlot.Weekday.choices],
     })
