@@ -533,6 +533,52 @@ def export_csv(request, report):
         filename = "fee-ledger.csv"
         headers = ["Admission number", "Student", "Fee head", "Amount", "Paid", "Balance", "Due date", "Status", "Reference"]
         values = ((r.student.admission_number, str(r.student), r.title, r.amount, r.paid_amount, r.balance, r.due_date or "", r.get_status_display(), r.payment_reference) for r in rows)
+    elif report == "fee-payments":
+        from django.utils.dateparse import parse_date
+
+        require_roles(membership, FEE_ROLES)
+        rows = FeePayment.objects.filter(
+            school=membership.school, fee_record__school=membership.school,
+        ).select_related("fee_record", "fee_record__student", "fee_record__student__classroom", "recorded_by")
+        fee_id = request.GET.get("fee_id", "").strip()
+        if fee_id:
+            if not fee_id.isdigit():
+                raise Http404("Invalid fee entry.")
+            rows = rows.filter(fee_record_id=int(fee_id))
+        parsed_dates = {}
+        for parameter, lookup in (("date_from", "payment_date__gte"), ("date_to", "payment_date__lte")):
+            raw_date = request.GET.get(parameter, "").strip()
+            if raw_date:
+                parsed = parse_date(raw_date)
+                if parsed is None:
+                    return HttpResponse("Invalid date filter. Use YYYY-MM-DD.", status=400)
+                parsed_dates[parameter] = parsed
+                rows = rows.filter(**{lookup: parsed})
+        if parsed_dates.get("date_from") and parsed_dates.get("date_to") and parsed_dates["date_from"] > parsed_dates["date_to"]:
+            return HttpResponse("date_from must be on or before date_to.", status=400)
+        method = request.GET.get("method", "").strip()
+        valid_methods = {value for value, _label in FeePayment.Method.choices}
+        if method:
+            if method not in valid_methods:
+                return HttpResponse("Invalid payment method filter.", status=400)
+            rows = rows.filter(method=method)
+        query = request.GET.get("q", "").strip()[:100]
+        if query:
+            rows = rows.filter(
+                Q(fee_record__student__first_name__icontains=query)
+                | Q(fee_record__student__last_name__icontains=query)
+                | Q(fee_record__student__admission_number__icontains=query)
+                | Q(fee_record__title__icontains=query)
+                | Q(reference__icontains=query)
+            )
+        filename = "fee-payments.csv"
+        headers = ["Payment date", "Admission number", "Student", "Class", "Fee head", "Amount", "Method", "Reference", "Note", "Recorded by"]
+        values = ((
+            p.payment_date, p.fee_record.student.admission_number, str(p.fee_record.student),
+            p.fee_record.student.classroom.name, p.fee_record.title, p.amount,
+            p.get_method_display(), p.reference, p.note,
+            p.recorded_by.get_username() if p.recorded_by else "",
+        ) for p in rows)
     else:
         raise Http404("Unknown report.")
 
