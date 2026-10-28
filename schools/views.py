@@ -787,6 +787,34 @@ def export_csv(request, report):
         filename = "fee-ledger.csv"
         headers = ["Admission number", "Student", "Fee head", "Amount", "Paid", "Balance", "Due date", "Status", "Reference"]
         values = ((r.student.admission_number, str(r.student), r.title, r.amount, r.paid_amount, r.balance, r.due_date or "", r.get_status_display(), r.payment_reference) for r in rows)
+    elif report == "fee-collection-summary":
+        from django.db.models import Count, Sum
+        from django.utils.dateparse import parse_date
+
+        require_roles(membership, FEE_ROLES)
+        rows = FeePayment.objects.filter(
+            school=membership.school, fee_record__school=membership.school,
+        )
+        parsed_dates = {}
+        for parameter, lookup in (("date_from", "payment_date__gte"), ("date_to", "payment_date__lte")):
+            raw_date = request.GET.get(parameter, "").strip()
+            if raw_date:
+                parsed = parse_date(raw_date)
+                if parsed is None:
+                    return HttpResponse("Invalid date filter. Use YYYY-MM-DD.", status=400)
+                parsed_dates[parameter] = parsed
+                rows = rows.filter(**{lookup: parsed})
+        if parsed_dates.get("date_from") and parsed_dates.get("date_to") and parsed_dates["date_from"] > parsed_dates["date_to"]:
+            return HttpResponse("date_from must be on or before date_to.", status=400)
+        summary = rows.values("payment_date", "method").annotate(
+            transaction_count=Count("id"), total_amount=Sum("amount"),
+        ).order_by("payment_date", "method")
+        filename = "fee-collection-summary.csv"
+        headers = ["Payment date", "Payment method", "Transaction count", "Total collected"]
+        values = ((
+            item["payment_date"], dict(FeePayment.Method.choices).get(item["method"], item["method"]),
+            item["transaction_count"], item["total_amount"],
+        ) for item in summary)
     elif report == "fee-payments":
         from django.utils.dateparse import parse_date
 
