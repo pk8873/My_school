@@ -158,6 +158,8 @@ class FeeRecord(models.Model):
             errors["student"] = "Student must belong to the same school."
         if self.amount is not None and self.amount < 0:
             errors["amount"] = "Amount cannot be negative."
+        if self.paid_amount is not None and self.paid_amount < 0:
+            errors["paid_amount"] = "Paid amount cannot be negative."
         if self.paid_amount is not None and self.amount is not None and self.paid_amount > self.amount:
             errors["paid_amount"] = "Paid amount cannot exceed total amount."
         if errors:
