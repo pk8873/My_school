@@ -586,6 +586,53 @@ def export_csv(request, report):
             r.student.classroom.name, r.student.classroom.section, r.marks_obtained,
             r.exam.max_marks, r.percentage, r.remarks,
         ) for r in rows)
+    elif report == "homework-submissions":
+        from django.utils.dateparse import parse_date
+        from .models import HomeworkSubmission
+
+        require_roles(membership, ACADEMIC_ROLES)
+        rows = HomeworkSubmission.objects.filter(
+            school=membership.school,
+            homework__school=membership.school,
+            student__school=membership.school,
+        ).select_related(
+            "homework", "homework__classroom", "student", "student__classroom", "graded_by",
+        ).order_by("-submitted_at")
+        homework_id = request.GET.get("homework", "").strip()
+        if homework_id:
+            if not homework_id.isdigit():
+                return HttpResponse("Invalid homework filter.", status=400)
+            rows = rows.filter(homework_id=int(homework_id))
+        classroom_id = request.GET.get("classroom", "").strip()
+        if classroom_id:
+            if not classroom_id.isdigit():
+                return HttpResponse("Invalid classroom filter.", status=400)
+            rows = rows.filter(student__classroom_id=int(classroom_id), student__classroom__school=membership.school)
+        status = request.GET.get("status", "").strip()
+        valid_statuses = {value for value, _label in HomeworkSubmission.Status.choices}
+        if status:
+            if status not in valid_statuses:
+                return HttpResponse("Invalid submission status filter.", status=400)
+            rows = rows.filter(status=status)
+        parsed_dates = {}
+        for parameter, lookup in (("date_from", "submitted_at__date__gte"), ("date_to", "submitted_at__date__lte")):
+            raw_date = request.GET.get(parameter, "").strip()
+            if raw_date:
+                parsed = parse_date(raw_date)
+                if parsed is None:
+                    return HttpResponse("Invalid date filter. Use YYYY-MM-DD.", status=400)
+                parsed_dates[parameter] = parsed
+                rows = rows.filter(**{lookup: parsed})
+        if parsed_dates.get("date_from") and parsed_dates.get("date_to") and parsed_dates["date_from"] > parsed_dates["date_to"]:
+            return HttpResponse("date_from must be on or before date_to.", status=400)
+        filename = "homework-submissions.csv"
+        headers = ["Homework", "Due date", "Admission number", "Student", "Class", "Section", "Submitted at", "Status", "Submission text", "Teacher feedback", "Reviewed by", "Reviewed at"]
+        values = ((
+            row.homework.title, row.homework.due_date or "", row.student.admission_number,
+            str(row.student), row.student.classroom.name, row.student.classroom.section,
+            row.submitted_at, row.get_status_display(), row.submission_text,
+            row.teacher_feedback, row.graded_by.get_username() if row.graded_by else "", row.graded_at or "",
+        ) for row in rows)
     elif report == "fees":
         require_roles(membership, FEE_ROLES)
         rows = FeeRecord.objects.filter(school=membership.school).select_related("student")
