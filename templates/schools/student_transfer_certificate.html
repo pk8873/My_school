@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Transfer Certificate Draft · School Saathi{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><span class="eyebrow">SCHOOL RECORDS</span><h1>Transfer Certificate draft</h1><p>Create a printable draft using the selected student's records from this school.</p></div>
+  <a class="btn btn-outline-secondary" href="{% url 'students' %}?school={{ membership.school_id }}">Back to students</a>
+</div>
+<section class="panel">
+  <div class="panel-heading"><h2>Certificate details</h2><p>This tool creates a draft PDF only; it does not store an official certificate number or issue a legally verified certificate.</p></div>
+  {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+  <div class="alert alert-warning">Verify admission records, attendance, fee status, and applicable school/board rules before signing or issuing the certificate. The generated PDF is marked DRAFT.</div>
+  <form method="post" class="row g-3">
+    {% csrf_token %}
+    <input type="hidden" name="school" value="{{ membership.school_id }}">
+    <div class="col-12">
+      <label class="form-label" for="tc-student">Student</label>
+      <select class="form-select" id="tc-student" name="student" required>
+        <option value="">Select student</option>
+        {% for student in students %}
+        <option value="{{ student.pk }}">{{ student.admission_number }} — {{ student.first_name }} {{ student.last_name }} · {{ student.classroom }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-6">
+      <label class="form-label" for="tc-leaving-date">Date of leaving (optional)</label>
+      <input class="form-control" id="tc-leaving-date" type="date" name="leaving_date">
+    </div>
+    <div class="col-12 col-md-6">
+      <label class="form-label" for="tc-conduct">Conduct (optional)</label>
+      <input class="form-control" id="tc-conduct" name="conduct" maxlength="100" placeholder="Only enter if verified">
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="tc-reason">Reason for leaving (optional)</label>
+      <input class="form-control" id="tc-reason" name="reason" maxlength="250">
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="tc-remarks">Remarks (optional)</label>
+      <textarea class="form-control" id="tc-remarks" name="remarks" maxlength="500" rows="3"></textarea>
+    </div>
+    <div class="col-12"><button class="btn btn-primary" type="submit">Generate draft PDF</button></div>
+  </form>
+</section>
+{% endblock %}
