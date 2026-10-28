@@ -17,6 +17,8 @@
 - School-scoped staff/parent/student account management, parent-child links with fee/result visibility flags, and staff-managed student portal account linking.
 - Subscription plan/status metadata and student admission limits; this is not payment processing or automated subscription billing.
 - Class-wise or school-wide homework assignments with due dates and publish control.
+- Student text-based homework submission, teacher review status and written feedback, with school-scoped authorization.
+- Repeatable synthetic demo-data command for a demo school, accounts, students, attendance, fees, exam results, homework, announcement and timetable. The command refuses to run with DEBUG=False.
 - Audience-based school announcements for parents, students, staff or everyone.
 - Combined Academics workspace with responsive cards, accessible form labels, helpful empty states and role-aware navigation.
 - Attendance और fees के लिए Django Admin registration.
@@ -28,7 +30,7 @@
 - Automated recurring billing, payment provider integration/webhooks and subscription lifecycle enforcement (Super Admin onboarding, plan metadata and student-limit checks are implemented; paid billing is not connected).
 - Parent/student portal foundations: linked children’s attendance and fee summaries, linked student profile attendance/fee summaries, and academic updates. PDF reports, attendance analytics and homework submissions remain pending.
 - Payroll, staff attendance and staff self-service. Basic school-scoped account creation and staff/family directory are implemented.
-- Bulk marks entry, homework submission/teacher feedback and push notifications. Staff-managed student account linking is implemented.
+- Bulk marks entry, homework file/photo uploads, push notifications and homework revision history. Text-based homework submission and teacher feedback are implemented.
 - Attendance bulk marking, edit/correction audit trail, PDF exports and advanced report filters.
 - Fee receipts/PDF, discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks.
 - Full CRUD edit/delete flows, password reset/email delivery, audit logs, backups/restore and monitoring.
@@ -64,7 +66,7 @@ Open:
 - Admin: http://127.0.0.1:8000/admin/
 - Health check: http://127.0.0.1:8000/health/
 
-After creating a superuser, create a School in Django Admin, then create a Membership linking your login user to that school with the `school_admin` role. Log in through the app to use the school pages. Use synthetic records for development.
+For a ready-made local demo, run `python manage.py seed_demo_data` after migrations. It creates only synthetic demo records and refuses to run with `DEBUG=False`. Newly created demo accounts use `DemoPass123!` and usernames `demo_admin`, `demo_teacher`, `demo_parent`, `demo_student`; existing accounts keep their existing passwords. Never expose demo accounts publicly. Alternatively, create a superuser and school membership manually. Use synthetic records only.
 
 ## Tenant security notes
 Never trust a submitted school ID as authorization. Every school workflow must verify an active Membership and restrict all records to that school. Parent/student pages also need record-level authorization. Current Django Admin registrations are useful for local setup but do **not** implement school-specific admin isolation; do not grant untrusted school staff unrestricted Django Admin access.
