@@ -10,7 +10,7 @@ from datetime import datetime
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
-from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory, TransferCertificate, Announcement, AnnouncementRead, SchoolEvent
+from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory, TransferCertificate, Announcement, AnnouncementRead, SchoolEvent, SchoolEventRSVP
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -407,6 +407,25 @@ def school_events(request):
         ["everyone", "students"] if role == Membership.Role.STUDENT else ["everyone", "staff"]
     )
     if request.method == "POST":
+        action = request.POST.get("action", "create").strip()
+        if action == "rsvp":
+            event_id = request.POST.get("event_id", "").strip()
+            response_value = request.POST.get("response", "").strip()
+            event = SchoolEvent.objects.filter(
+                pk=event_id, school=membership.school, is_published=True,
+                audience__in=allowed_audiences,
+            ).first() if event_id.isdigit() else None
+            if event is None:
+                raise PermissionDenied("This event is not available to your account.")
+            if response_value not in SchoolEventRSVP.Response.values:
+                messages.error(request, "Choose attending or not attending.")
+            else:
+                SchoolEventRSVP.objects.update_or_create(
+                    event=event, user=request.user, defaults={"response": response_value}
+                )
+                messages.success(request, "Your event response has been saved.")
+                return redirect(f"{request.path}?school={membership.school_id}")
+            return redirect(f"{request.path}?school={membership.school_id}")
         if not management:
             raise PermissionDenied("Only school admins and principals can create events.")
         title = request.POST.get("title", "").strip()
@@ -451,9 +470,16 @@ def school_events(request):
     events = SchoolEvent.objects.filter(
         school=membership.school, is_published=True, audience__in=allowed_audiences
     ).order_by("starts_at", "pk")[:200]
+    rsvp_map = dict(SchoolEventRSVP.objects.filter(
+        event__in=events, user=request.user
+    ).values_list("event_id", "response"))
+    if management:
+        for event in events:
+            event.attending_count = event.rsvps.filter(response=SchoolEventRSVP.Response.ATTENDING).count()
+            event.not_attending_count = event.rsvps.filter(response=SchoolEventRSVP.Response.NOT_ATTENDING).count()
     return render(request, "schools/school_events.html", {
         "membership": membership, "events": events, "can_manage": management,
-        "audience_choices": SchoolEvent.Audience.choices,
+        "audience_choices": SchoolEvent.Audience.choices, "rsvp_map": rsvp_map,
     })
 
 
