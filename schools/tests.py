@@ -94,6 +94,43 @@ class TenantBoundaryTests(TestCase):
         self.assertTrue(AttendanceRecord.objects.filter(school=self.a, student=self.sa).exists())
         self.assertFalse(AttendanceRecord.objects.filter(school=self.b, student=self.sb).exists())
 
+
+    def test_bulk_attendance_marks_every_active_student_in_selected_class(self):
+        self.client.force_login(self.user_a)
+        response = self.client.post("/attendance/bulk/", {
+            "school": str(self.a.pk), "classroom": str(self.ca.pk), "date": "2026-10-28",
+            f"status_{self.sa.pk}": "present", f"note_{self.sa.pk}": "On time",
+        })
+        self.assertRedirects(response, f"/attendance/bulk/?school={self.a.pk}&classroom={self.ca.pk}&date=2026-10-28")
+        record = AttendanceRecord.objects.get(school=self.a, student=self.sa, date="2026-10-28")
+        self.assertEqual(record.status, AttendanceRecord.Status.PRESENT)
+        self.assertEqual(record.note, "On time")
+        self.assertFalse(AttendanceRecord.objects.filter(school=self.b, student=self.sb).exists())
+
+    def test_bulk_attendance_cannot_select_another_school_class(self):
+        self.client.force_login(self.user_a)
+        response = self.client.post("/attendance/bulk/", {
+            "school": str(self.a.pk), "classroom": str(self.cb.pk), "date": "2026-10-28",
+            f"status_{self.sb.pk}": "present",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(AttendanceRecord.objects.filter(school=self.b, student=self.sb).exists())
+
+    def test_bulk_attendance_updates_existing_records_without_duplicates(self):
+        self.client.force_login(self.user_a)
+        AttendanceRecord.objects.create(
+            school=self.a, student=self.sa, date="2026-10-28", status=AttendanceRecord.Status.ABSENT,
+        )
+        self.client.post("/attendance/bulk/", {
+            "school": str(self.a.pk), "classroom": str(self.ca.pk), "date": "2026-10-28",
+            f"status_{self.sa.pk}": "late", f"note_{self.sa.pk}": "Arrived late",
+        })
+        self.assertEqual(
+            AttendanceRecord.objects.filter(school=self.a, student=self.sa, date="2026-10-28").count(), 1,
+        )
+        record = AttendanceRecord.objects.get(school=self.a, student=self.sa, date="2026-10-28")
+        self.assertEqual(record.status, AttendanceRecord.Status.LATE)
+
     def test_fee_entry_is_manual_and_school_scoped(self):
         self.client.force_login(self.user_a)
         response = self.client.post("/fees/", {
