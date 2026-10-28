@@ -513,3 +513,39 @@ class StaffLeaveRequest(models.Model):
 
     def __str__(self):
         return f"{self.requester} · {self.start_date} to {self.end_date} · {self.get_status_display()}"
+
+
+class StudentClassHistory(models.Model):
+    """Auditable record of a student's class change or promotion."""
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="student_class_history")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="class_history")
+    from_classroom = models.ForeignKey(ClassRoom, on_delete=models.PROTECT, related_name="student_promotions_from")
+    to_classroom = models.ForeignKey(ClassRoom, on_delete=models.PROTECT, related_name="student_promotions_to")
+    effective_date = models.DateField(default=timezone.localdate)
+    promoted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="student_promotions_recorded")
+    note = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-effective_date", "-created_at"]
+        indexes = [
+            models.Index(fields=["school", "effective_date"], name="studclass_school_date_idx"),
+            models.Index(fields=["student", "effective_date"], name="studclass_student_date_idx"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.student_id and self.school_id and self.student.school_id != self.school_id:
+            errors["student"] = "Student must belong to the selected school."
+        if self.from_classroom_id and self.school_id and self.from_classroom.school_id != self.school_id:
+            errors["from_classroom"] = "Previous class must belong to the selected school."
+        if self.to_classroom_id and self.school_id and self.to_classroom.school_id != self.school_id:
+            errors["to_classroom"] = "New class must belong to the selected school."
+        if self.from_classroom_id and self.to_classroom_id and self.from_classroom_id == self.to_classroom_id:
+            errors["to_classroom"] = "Student must move to a different class."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.student} · {self.from_classroom} → {self.to_classroom} · {self.effective_date}"
