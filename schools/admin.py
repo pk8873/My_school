@@ -89,3 +89,13 @@ class SchoolSubscriptionAdmin(admin.ModelAdmin):
     list_display = ("school", "plan", "status", "student_limit", "trial_ends_at", "period_ends_at")
     list_filter = ("plan", "status")
     search_fields = ("school__name", "provider_subscription_id")
+
+
+from .models import HomeworkSubmission
+
+@admin.register(HomeworkSubmission)
+class HomeworkSubmissionAdmin(admin.ModelAdmin):
+    list_display = ("homework", "student", "school", "status", "submitted_at", "graded_by", "graded_at")
+    list_filter = ("school", "status", "submitted_at")
+    search_fields = ("homework__title", "student__first_name", "student__last_name", "student__admission_number")
+    readonly_fields = ("submitted_at", "created_at", "graded_at")
