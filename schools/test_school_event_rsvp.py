@@ -65,3 +65,24 @@ class SchoolEventRSVPTests(TestCase):
         response = self.client.get(f"/events/?school={self.school.pk}")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "1 attending")
+
+
+    def test_management_can_download_event_rsvp_csv(self):
+        SchoolEventRSVP.objects.create(event=self.event, user=self.parent, response="attending")
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/events/{self.event.pk}/rsvps.csv")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response["Content-Type"])
+        self.assertIn(b"Parent orientation", response.content)
+        self.assertIn(b"rsvp_parent", response.content)
+        self.assertIn(b"Attending", response.content)
+
+    def test_parent_cannot_download_rsvp_csv(self):
+        self.client.force_login(self.parent)
+        response = self.client.get(f"/events/{self.event.pk}/rsvps.csv")
+        self.assertEqual(response.status_code, 403)
+
+    def test_management_cannot_download_other_school_event_rsvp_csv(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/events/{self.foreign_event.pk}/rsvps.csv")
+        self.assertEqual(response.status_code, 404)
