@@ -639,3 +639,24 @@ class SchoolEvent(models.Model):
     def __str__(self):
         return self.title
 
+class SchoolEventRSVP(models.Model):
+    class Response(models.TextChoices):
+        ATTENDING = "attending", "Attending"
+        NOT_ATTENDING = "not_attending", "Not attending"
+
+    event = models.ForeignKey(SchoolEvent, on_delete=models.CASCADE, related_name="rsvps")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="school_event_rsvps")
+    response = models.CharField(max_length=16, choices=Response.choices)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["event", "user"], name="unique_school_event_rsvp"),
+        ]
+        indexes = [
+            models.Index(fields=["event", "response"], name="school_event_rsvp_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.user}: {self.event} ({self.response})"
+
