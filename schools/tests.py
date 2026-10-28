@@ -683,3 +683,42 @@ class SchoolDataExportTests(TestCase):
         response = self.client.get(f"/data-export.zip?school={self.a.pk}")
         self.assertEqual(response.status_code, 302)
         self.assertIn("/accounts/login/", response.url)
+
+
+class ClassCapacityTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Capacity Test School", slug="capacity-test")
+        self.admin = User.objects.create_user(username="capacity_admin", password="synthetic-test-pass-123")
+        Membership.objects.create(user=self.admin, school=self.school, role=Membership.Role.SCHOOL_ADMIN)
+        self.classroom = ClassRoom.objects.create(
+            school=self.school, name="Class 1", section="A",
+            academic_year="2026-2027", capacity=1,
+        )
+        self.existing_student = Student.objects.create(
+            school=self.school, classroom=self.classroom,
+            admission_number="CAP-001", first_name="Existing", is_active=True,
+        )
+
+    def test_manual_admission_is_blocked_when_class_is_full(self):
+        self.client.force_login(self.admin)
+        response = self.client.post("/students/", {
+            "classroom": self.classroom.pk, "admission_number": "CAP-002",
+            "first_name": "Extra", "last_name": "Student", "is_active": "on",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "capacity of 1 active students")
+        self.assertFalse(Student.objects.filter(school=self.school, admission_number="CAP-002").exists())
+
+    def test_csv_import_is_atomic_when_class_capacity_would_be_exceeded(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.client.force_login(self.admin)
+        csv_content = (
+            "admission_number,first_name,last_name,class_name,section,academic_year,date_of_birth,admitted_at,is_active\n"
+            "CAP-002,Extra,Student,Class 1,A,2026-2027,,,true\n"
+        )
+        upload = SimpleUploadedFile("students.csv", csv_content.encode("utf-8"), content_type="text/csv")
+        response = self.client.post("/students/import/", {"csv_file": upload})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "capacity of Class 1 A")
+        self.assertFalse(Student.objects.filter(school=self.school, admission_number="CAP-002").exists())
