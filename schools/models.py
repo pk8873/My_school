@@ -257,7 +257,7 @@ class HomeworkSubmission(models.Model):
             models.UniqueConstraint(fields=["homework", "student"], name="unique_homework_submission_per_student"),
         ]
         indexes = [
-            models.Index(fields=["school", "status"], name="schools_hwsub_school_status_idx"),
+            models.Index(fields=["school", "status"], name="hwsub_school_status_idx"),
         ]
 
     def clean(self):
