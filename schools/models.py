@@ -549,3 +549,42 @@ class StudentClassHistory(models.Model):
 
     def __str__(self):
         return f"{self.student} · {self.from_classroom} → {self.to_classroom} · {self.effective_date}"
+
+class TransferCertificate(models.Model):
+    class Status(models.TextChoices):
+        ISSUED = "issued", "Issued"
+        CANCELLED = "cancelled", "Cancelled"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="transfer_certificates")
+    student = models.ForeignKey(Student, on_delete=models.PROTECT, related_name="transfer_certificates")
+    certificate_number = models.CharField(max_length=40)
+    issue_date = models.DateField(default=timezone.localdate)
+    leaving_date = models.DateField(null=True, blank=True)
+    reason = models.CharField(max_length=250, blank=True)
+    conduct = models.CharField(max_length=100, blank=True)
+    remarks = models.CharField(max_length=500, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.ISSUED)
+    issued_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="transfer_certificates_issued")
+    cancelled_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="transfer_certificates_cancelled")
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-issue_date", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["school", "certificate_number"], name="unique_tc_number_per_school"),
+        ]
+        indexes = [
+            models.Index(fields=["school", "status", "issue_date"], name="tc_school_status_date_idx"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.student_id and self.school_id and self.student.school_id != self.school_id:
+            errors["student"] = "Student must belong to the selected school."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.certificate_number} · {self.student}"
+
