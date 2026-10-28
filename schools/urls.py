@@ -27,6 +27,7 @@ urlpatterns = [
     path("students/<int:student_id>/fee-statement.pdf", views.student_fee_statement_pdf, name="student_fee_statement_pdf"),
     path("academics/", views.academics, name="academics"),
     path("announcements/inbox/", views.announcement_inbox, name="announcement_inbox"),
+    path("events/", views.school_events, name="school_events"),
     path("homework/<int:homework_id>/submit/", views.homework_submit, name="homework_submit"),
     path("homework/submissions/<int:submission_id>/review/", views.homework_review, name="homework_review"),
     path("timetable/", views.timetable, name="timetable"),
