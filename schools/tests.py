@@ -146,6 +146,38 @@ class TenantBoundaryTests(TestCase):
         self.assertFalse(FeeRecord.objects.filter(school=self.b).exists())
 
 
+    def test_fee_register_overdue_filter_is_school_scoped(self):
+        FeeRecord.objects.create(
+            school=self.a, student=self.sa, title="Overdue tuition", amount="1000.00",
+            paid_amount="200.00", due_date="2020-01-01", status=FeeRecord.Status.PARTIAL,
+        )
+        FeeRecord.objects.create(
+            school=self.a, student=self.sa, title="Future tuition", amount="1000.00",
+            paid_amount="0.00", due_date="2099-01-01", status=FeeRecord.Status.PENDING,
+        )
+        FeeRecord.objects.create(
+            school=self.b, student=self.sb, title="Other school overdue", amount="1000.00",
+            paid_amount="0.00", due_date="2020-01-01", status=FeeRecord.Status.PENDING,
+        )
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/fees/?school={self.a.pk}&overdue=1")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Overdue tuition")
+        self.assertNotContains(response, "Future tuition")
+        self.assertNotContains(response, "Other school overdue")
+
+    def test_fee_register_search_matches_student_or_fee_title(self):
+        FeeRecord.objects.create(
+            school=self.a, student=self.sa, title="Annual science fee", amount="500.00",
+            paid_amount="0.00", status=FeeRecord.Status.PENDING,
+        )
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/fees/?school={self.a.pk}&q=science")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Annual science fee")
+        self.assertNotContains(response, "Other school fee")
+
+
     def test_teacher_can_create_exam_only_for_own_school(self):
         teacher = User.objects.create_user(username="synthetic_teacher_exam", password="synthetic-test-pass-123")
         Membership.objects.create(user=teacher, school=self.a, role=Membership.Role.TEACHER)
