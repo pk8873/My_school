@@ -6,7 +6,7 @@
 - Django login और school membership आधारित tenant selection.
 - School, class, student और parent-student link data models.
 - Responsive dashboard: student/class count, आज की attendance count, fee ledger summary और quick actions.
-- School admin/principal के लिए class creation और student admission/search.
+- School admin/principal के लिए class creation और student admission/search. Bulk student CSV import validates up to 500 rows atomically, checks school-local class/admission numbers and student plan limits, and never partially imports an invalid file.
 - School admin/principal/teacher के लिए daily attendance entry, date-wise register और class-wise bulk attendance marking; bulk save उसी class/date के मौजूदा records को update करता है. Bulk attendance creation/correction changes are recorded in a school-scoped audit history with old/new status and notes.
 - School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance, student/admission number/fee-head search, payment-status filter और unpaid balance वाले past-due records का overdue filter (school-scoped).
 - Individual manual fee payment history with per-entry downloadable PDF acknowledgements and school-scoped CSV export. CSV exports can be filtered by fee entry, payment date range, payment method and student/admission/reference search. Receipts are school-scoped and role-protected, and state that they acknowledge a manual ledger entry rather than verify bank/online payment. Each new entry updates the outstanding balance inside a transaction and cannot exceed the remaining balance.
