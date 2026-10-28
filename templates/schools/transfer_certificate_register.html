@@ -27,6 +27,11 @@
 </section>
 <section class="panel">
   <div class="panel-heading"><h2>Recent certificate register</h2><p>Latest 200 records for this school. Cancelled entries are retained.</p></div>
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    <a class="btn btn-outline-success" href="{% url 'transfer_certificate_register_csv' %}?school={{ membership.school_id }}">Export full register CSV</a>
+    <a class="btn btn-outline-secondary" href="{% url 'transfer_certificate_register_csv' %}?school={{ membership.school_id }}&status=issued">Export issued only</a>
+    <a class="btn btn-outline-secondary" href="{% url 'transfer_certificate_register_csv' %}?school={{ membership.school_id }}&status=cancelled">Export cancelled only</a>
+  </div>
   <div class="table-responsive"><table class="table table-hover align-middle">
     <thead><tr><th>Certificate no.</th><th>Student</th><th>Admission no.</th><th>Issue date</th><th>Leaving date</th><th>Status</th><th>Issued by</th><th>Action</th></tr></thead>
     <tbody>
