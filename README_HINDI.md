@@ -8,7 +8,7 @@
 - Responsive dashboard: student/class count, आज की attendance count, fee ledger summary और quick actions.
 - School admin/principal के लिए class creation और student admission/search.
 - School admin/principal/teacher के लिए daily attendance entry, date-wise register और class-wise bulk attendance marking; bulk save उसी class/date के मौजूदा records को update करता है. Bulk attendance creation/correction changes are recorded in a school-scoped audit history with old/new status and notes.
-- School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance.
+- School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance, student/admission number/fee-head search, payment-status filter और unpaid balance वाले past-due records का overdue filter (school-scoped).
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection.
 - Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation. School admins/principals manage the schedule; teachers see only assigned slots; students see their linked class; parents see linked children’s classes.
 - Tenant-scoped CSV exports for student registers, attendance (date-filterable) and fee ledger, protected by role checks.
