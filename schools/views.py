@@ -327,10 +327,15 @@ def fees(request):
         record.school = membership.school
         record.recorded_by = request.user
         record.full_clean()
-        if record.paid_amount >= record.amount and record.amount > 0:
-            record.status = FeeRecord.Status.PAID
-        elif record.paid_amount > 0 and record.status == FeeRecord.Status.PENDING:
-            record.status = FeeRecord.Status.PARTIAL
+        # Keep the ledger status consistent with the amount actually recorded.
+        # WAIVED remains an explicit management decision.
+        if record.status != FeeRecord.Status.WAIVED:
+            if record.amount > 0 and record.paid_amount >= record.amount:
+                record.status = FeeRecord.Status.PAID
+            elif record.paid_amount > 0:
+                record.status = FeeRecord.Status.PARTIAL
+            else:
+                record.status = FeeRecord.Status.PENDING
         record.save()
         messages.success(request, "Fee record saved. This is a manual record; no online payment was processed.")
         return redirect(f"{request.path}?school={membership.school_id}")
