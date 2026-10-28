@@ -145,7 +145,8 @@ def attendance_bulk(request):
     if request.method == "POST":
         form = BulkAttendanceSelectionForm(request.POST, school=membership.school)
     else:
-        form = BulkAttendanceSelectionForm(request.GET or None, school=membership.school, initial=initial)
+        query_data = request.GET if ("classroom" in request.GET or "date" in request.GET) else None
+        form = BulkAttendanceSelectionForm(query_data, school=membership.school, initial=initial)
 
     students = Student.objects.none()
     existing = {}
@@ -183,8 +184,9 @@ def attendance_bulk(request):
             school=membership.school, classroom=classroom, is_active=True
         ).order_by("first_name", "last_name")
     elif request.method == "GET":
+        query_data = request.GET if ("classroom" in request.GET or "date" in request.GET) else None
         form = BulkAttendanceSelectionForm(
-            request.GET or None, school=membership.school,
+            query_data, school=membership.school,
             initial={"date": selected_date, "classroom": request.GET.get("classroom") or None},
         )
 
