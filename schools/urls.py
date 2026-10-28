@@ -38,4 +38,5 @@ urlpatterns = [
     path("staff/", views.staff_management, name="staff_management"),
     path("staff/attendance/", views.staff_attendance, name="staff_attendance"),
     path("staff/leave/", views.staff_leave, name="staff_leave"),
+    path("data-export.zip", views.school_data_export, name="school_data_export"),
 ]

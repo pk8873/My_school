@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -12,6 +12,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
 from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory, TransferCertificate, Announcement, AnnouncementRead, SchoolEvent, SchoolEventRSVP
 from .tenant import active_memberships
+from .data_export import build_school_export
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
 MANAGEMENT_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL}
@@ -166,9 +167,22 @@ def students(request):
             student = form.save(commit=False)
             student.school = membership.school
             student.full_clean()
-            student.save()
-            messages.success(request, "Student admission saved.")
-            return redirect(f"{request.path}?school={membership.school_id}")
+            # Lock the selected classroom during the capacity check to reduce the
+            # chance of concurrent admissions exceeding its configured capacity.
+            with transaction.atomic():
+                classroom = ClassRoom.objects.select_for_update().filter(
+                    pk=student.classroom_id, school=membership.school, is_active=True
+                ).first()
+                if classroom is None:
+                    form.add_error("classroom", "Choose an active class from this school.")
+                elif student.is_active and Student.objects.filter(
+                    school=membership.school, classroom=classroom, is_active=True
+                ).count() >= classroom.capacity:
+                    form.add_error("classroom", f"{classroom} is at its capacity of {classroom.capacity} active students.")
+                else:
+                    student.save()
+                    messages.success(request, "Student admission saved.")
+                    return redirect(f"{request.path}?school={membership.school_id}")
     query = request.GET.get("q", "").strip()
     rows = Student.objects.filter(school=membership.school).select_related("classroom")
     if query:
@@ -313,10 +327,15 @@ def fees(request):
         record.school = membership.school
         record.recorded_by = request.user
         record.full_clean()
-        if record.paid_amount >= record.amount and record.amount > 0:
-            record.status = FeeRecord.Status.PAID
-        elif record.paid_amount > 0 and record.status == FeeRecord.Status.PENDING:
-            record.status = FeeRecord.Status.PARTIAL
+        # Keep the ledger status consistent with the amount actually recorded.
+        # WAIVED remains an explicit management decision.
+        if record.status != FeeRecord.Status.WAIVED:
+            if record.amount > 0 and record.paid_amount >= record.amount:
+                record.status = FeeRecord.Status.PAID
+            elif record.paid_amount > 0:
+                record.status = FeeRecord.Status.PARTIAL
+            else:
+                record.status = FeeRecord.Status.PENDING
         record.save()
         messages.success(request, "Fee record saved. This is a manual record; no online payment was processed.")
         return redirect(f"{request.path}?school={membership.school_id}")
@@ -1927,14 +1946,51 @@ def import_students_csv(request):
                         current_count = Student.objects.filter(school=membership.school).count()
                         if not error and subscription and subscription.student_limit and current_count + len(prepared) > subscription.student_limit:
                             error = f"Import would exceed this school's plan limit of {subscription.student_limit} students."
+                        # Validate class capacity as a batch so the CSV import remains atomic.
+                        incoming_counts = {}
+                        for student in prepared:
+                            if student.is_active:
+                                incoming_counts[student.classroom_id] = incoming_counts.get(student.classroom_id, 0) + 1
+                        if not error and incoming_counts:
+                            active_counts = {
+                                row["classroom_id"]: row["count"]
+                                for row in Student.objects.filter(
+                                    school=membership.school, is_active=True,
+                                    classroom_id__in=set(incoming_counts),
+                                ).values("classroom_id").annotate(count=Count("id"))
+                            }
+                            for classroom_id, incoming in incoming_counts.items():
+                                classroom = next(s.classroom for s in prepared if s.classroom_id == classroom_id)
+                                if active_counts.get(classroom_id, 0) + incoming > classroom.capacity:
+                                    error = f"Import would exceed the capacity of {classroom}: {classroom.capacity} active students maximum."
+                                    break
                         if not error:
                             try:
                                 with transaction.atomic():
+                                    # Lock affected classrooms and recheck counts to reduce race conditions.
+                                    classroom_ids = sorted({s.classroom_id for s in prepared})
+                                    locked_classes = {
+                                        c.pk: c for c in ClassRoom.objects.select_for_update().filter(
+                                            school=membership.school, pk__in=classroom_ids, is_active=True
+                                        ).order_by("pk")
+                                    }
+                                    if len(locked_classes) != len(classroom_ids):
+                                        raise ValidationError("One or more selected classes are no longer active.")
+                                    locked_counts = {
+                                        row["classroom_id"]: row["count"]
+                                        for row in Student.objects.filter(
+                                            school=membership.school, is_active=True,
+                                            classroom_id__in=classroom_ids,
+                                        ).values("classroom_id").annotate(count=Count("id"))
+                                    }
+                                    for classroom_id, incoming in incoming_counts.items():
+                                        if locked_counts.get(classroom_id, 0) + incoming > locked_classes[classroom_id].capacity:
+                                            raise ValidationError("One or more classes have reached capacity.")
                                     for student in prepared:
                                         student.full_clean()
                                     Student.objects.bulk_create(prepared, batch_size=100)
                             except (ValidationError, IntegrityError) as exc:
-                                error = "Import was not completed because one or more rows failed validation. Check class names, admission numbers and required values."
+                                error = "Import was not completed because one or more rows failed validation or a class has reached capacity. Check class capacity, names, admission numbers and required values."
                             else:
                                 imported_count = len(prepared)
                                 messages.success(request, f"Imported {imported_count} students successfully. No existing records were changed.")
@@ -2097,3 +2153,19 @@ def staff_leave(request):
     return render(request, "schools/staff_leave.html", {
         "membership": membership, "is_manager": is_manager, "leave_requests": rows[:200],
     })
+
+
+
+@login_required
+@require_GET
+def school_data_export(request):
+    """Download a tenant-scoped CSV bundle; only school management can export it."""
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    archive = build_school_export(membership.school)
+    response = HttpResponse(archive, content_type="application/zip")
+    filename = f"school-saathi-{membership.school.slug}-export-{timezone.localdate().isoformat()}.zip"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response

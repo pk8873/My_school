@@ -637,3 +637,131 @@ class TenantBoundaryTests(TestCase):
         self.client.force_login(self.user_a)
         self.assertEqual(self.client.get(f"/fees/{zero_paid.pk}/receipt.pdf").status_code, 404)
         self.assertEqual(self.client.get(f"/fees/{other_school_fee.pk}/receipt.pdf").status_code, 404)
+
+
+
+class SchoolDataExportTests(TestCase):
+    def setUp(self):
+        self.a = School.objects.create(name="Alpha Synthetic School", slug="alpha-export")
+        self.b = School.objects.create(name="Beta Synthetic School", slug="beta-export")
+        self.user_a = User.objects.create_user(username="alpha_export_admin", password="synthetic-test-pass-123")
+        self.user_b = User.objects.create_user(username="beta_export_admin", password="synthetic-test-pass-123")
+        Membership.objects.create(user=self.user_a, school=self.a, role=Membership.Role.SCHOOL_ADMIN)
+        Membership.objects.create(user=self.user_b, school=self.b, role=Membership.Role.SCHOOL_ADMIN)
+        self.ca = ClassRoom.objects.create(school=self.a, name="Class 5", section="A", academic_year="2026-2027")
+        self.cb = ClassRoom.objects.create(school=self.b, name="Class 5", section="A", academic_year="2026-2027")
+        self.sa = Student.objects.create(school=self.a, classroom=self.ca, admission_number="A-001", first_name="Synthetic Alpha")
+        self.sb = Student.objects.create(school=self.b, classroom=self.cb, admission_number="B-001", first_name="Synthetic Beta")
+
+    def test_management_user_can_download_school_scoped_csv_bundle(self):
+        import io
+        import zipfile
+
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/data-export.zip?school={self.a.pk}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/zip")
+        self.assertIn("no-store", response["Cache-Control"])
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            self.assertIn("manifest.json", archive.namelist())
+            self.assertIn("students.csv", archive.namelist())
+            student_csv = archive.read("students.csv").decode("utf-8-sig")
+            self.assertIn("A-001", student_csv)
+            self.assertNotIn("B-001", student_csv)
+            manifest = archive.read("manifest.json").decode("utf-8")
+            self.assertIn("Alpha Synthetic School", manifest)
+            self.assertIn("not a full database backup", manifest)
+
+    def test_teacher_cannot_download_school_data_bundle(self):
+        teacher = User.objects.create_user(username="alpha_teacher_export", password="synthetic-test-pass-123")
+        Membership.objects.create(user=teacher, school=self.a, role=Membership.Role.TEACHER)
+        self.client.force_login(teacher)
+        response = self.client.get(f"/data-export.zip?school={self.a.pk}")
+        self.assertEqual(response.status_code, 403)
+
+    def test_school_export_requires_login(self):
+        response = self.client.get(f"/data-export.zip?school={self.a.pk}")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/accounts/login/", response.url)
+
+
+class ClassCapacityTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Capacity Test School", slug="capacity-test")
+        self.admin = User.objects.create_user(username="capacity_admin", password="synthetic-test-pass-123")
+        Membership.objects.create(user=self.admin, school=self.school, role=Membership.Role.SCHOOL_ADMIN)
+        self.classroom = ClassRoom.objects.create(
+            school=self.school, name="Class 1", section="A",
+            academic_year="2026-2027", capacity=1,
+        )
+        self.existing_student = Student.objects.create(
+            school=self.school, classroom=self.classroom,
+            admission_number="CAP-001", first_name="Existing", is_active=True,
+        )
+
+    def test_manual_admission_is_blocked_when_class_is_full(self):
+        self.client.force_login(self.admin)
+        response = self.client.post("/students/", {
+            "classroom": self.classroom.pk, "admission_number": "CAP-002",
+            "first_name": "Extra", "last_name": "Student", "is_active": "on",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "capacity of 1 active students")
+        self.assertFalse(Student.objects.filter(school=self.school, admission_number="CAP-002").exists())
+
+    def test_csv_import_is_atomic_when_class_capacity_would_be_exceeded(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.client.force_login(self.admin)
+        csv_content = (
+            "admission_number,first_name,last_name,class_name,section,academic_year,date_of_birth,admitted_at,is_active\n"
+            "CAP-002,Extra,Student,Class 1,A,2026-2027,,,true\n"
+        )
+        upload = SimpleUploadedFile("students.csv", csv_content.encode("utf-8"), content_type="text/csv")
+        response = self.client.post("/students/import/", {"csv_file": upload})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "capacity of Class 1 A")
+        self.assertFalse(Student.objects.filter(school=self.school, admission_number="CAP-002").exists())
+
+
+class FeeLedgerValidationTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Fee Validation School", slug="fee-validation")
+        self.user = User.objects.create_user(username="fee_validation_admin", password="synthetic-test-pass-123")
+        Membership.objects.create(user=self.user, school=self.school, role=Membership.Role.SCHOOL_ADMIN)
+        self.classroom = ClassRoom.objects.create(school=self.school, name="Class 2", section="A", academic_year="2026-2027")
+        self.student = Student.objects.create(
+            school=self.school, classroom=self.classroom,
+            admission_number="FV-001", first_name="Synthetic",
+        )
+
+    def test_negative_paid_amount_is_rejected_by_model_validation(self):
+        fee = FeeRecord(
+            school=self.school, student=self.student, title="Tuition",
+            amount="1000.00", paid_amount="-1.00",
+        )
+        with self.assertRaises(ValidationError) as raised:
+            fee.full_clean()
+        self.assertIn("paid_amount", raised.exception.message_dict)
+
+    def test_paid_status_cannot_be_selected_without_full_payment(self):
+        self.client.force_login(self.user)
+        response = self.client.post("/fees/", {
+            "student": self.student.pk, "title": "Term 1", "amount": "1000.00",
+            "paid_amount": "0.00", "due_date": "2026-11-15", "status": "paid",
+            "payment_reference": "", "note": "",
+        })
+        self.assertRedirects(response, f"/fees/?school={self.school.pk}")
+        fee = FeeRecord.objects.get(school=self.school, student=self.student, title="Term 1")
+        self.assertEqual(fee.status, FeeRecord.Status.PENDING)
+
+    def test_partial_payment_is_normalized_to_partial_status(self):
+        self.client.force_login(self.user)
+        response = self.client.post("/fees/", {
+            "student": self.student.pk, "title": "Term 2", "amount": "1000.00",
+            "paid_amount": "250.00", "due_date": "2026-11-15", "status": "pending",
+            "payment_reference": "", "note": "",
+        })
+        self.assertRedirects(response, f"/fees/?school={self.school.pk}")
+        fee = FeeRecord.objects.get(school=self.school, student=self.student, title="Term 2")
+        self.assertEqual(fee.status, FeeRecord.Status.PARTIAL)

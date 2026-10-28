@@ -3,12 +3,13 @@
 ## इस अपडेट में क्या शामिल है
 यह अभी भी **development / early-access build** है, production-ready SaaS नहीं। इस चरण में शामिल हैं:
 
-- Django login और school membership आधारित tenant selection.
+- Django login और school membership आधारित tenant selection; sign-in page से secure password reset flow, expiring single-use token और non-enumerating response.
+- Password reset email configuration: local development में console backend; production में SMTP environment variables से configure किया जा सकता है.
 - School, class, student और parent-student link data models.
 - Responsive dashboard: student/class count, आज की attendance count, fee ledger summary और quick actions.
-- School admin/principal के लिए class creation और student admission/search. Bulk student CSV import validates up to 500 rows atomically, checks school-local class/admission numbers and student plan limits, and never partially imports an invalid file. Student promotion/class transfer is also available for management roles: move up to 2,000 active students from one school class to another in one transaction, with per-student dated history and a note.
+- School admin/principal के लिए class creation और student admission/search. Class capacity is enforced for manual admissions and bulk CSV imports; imports validate up to 500 rows atomically, check school-local class/admission numbers and student plan limits, and never partially import a batch that exceeds class capacity. Student promotion/class transfer is also available for management roles: move up to 2,000 active students from one school class to another in one transaction, with per-student dated history and a note.
 - School admin/principal/teacher के लिए daily attendance entry, date-wise register और class-wise bulk attendance marking; bulk save उसी class/date के मौजूदा records को update करता है. Bulk attendance creation/correction changes are recorded in a school-scoped audit history with old/new status and notes.
-- School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance, student/admission number/fee-head search, payment-status filter और unpaid balance वाले past-due records का overdue filter (school-scoped).
+- School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance with server-side validation preventing negative paid amounts and inconsistent paid/partial statuses, student/admission number/fee-head search, payment-status filter और unpaid balance वाले past-due records का overdue filter (school-scoped).
 - Individual manual fee payment history with per-entry downloadable PDF acknowledgements and school-scoped CSV export. CSV exports can be filtered by fee entry, payment date range, payment method and student/admission/reference search. Receipts are school-scoped and role-protected, and state that they acknowledge a manual ledger entry rather than verify bank/online payment. Each new entry updates the outstanding balance inside a transaction and cannot exceed the remaining balance.
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection; academic staff can export school-scoped exam results to CSV with optional exam, class and exam-date range filters.
 - Homework submission CSV export for academic staff, with homework, class, status and submission-date filters; includes review status and teacher feedback.
@@ -81,3 +82,44 @@ School events calendar supports search by title, description, and location, with
 
 
 Family fee history: parent and student accounts can open `/my-fees/` to review school-scoped fee balances and manually recorded payment entries. Parents only see active linked children with `can_view_fees`; students only see their own portal-linked record. The page is read-only and does not process online payments. Existing fee statement/acknowledgement PDFs remain informational records, not bank verification.
+
+
+## Password reset email setup (नया)
+- Login page पर **Forgot your password?** link उपलब्ध है।
+- Reset token Django के built-in password-reset flow से बनता है; link expiry `PASSWORD_RESET_TIMEOUT` से नियंत्रित होती है (default 24 घंटे)।
+- Unknown email address पर भी वही confirmation page दिखता है, ताकि account existence reveal न हो।
+- Local development में reset link PowerShell terminal में दिखाई देता है; email वास्तव में भेजा नहीं जाता।
+- Production में `.env` या hosting environment में `EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` और वास्तविक `DEFAULT_FROM_EMAIL` सेट करें। SMTP credentials को GitHub में commit न करें।
+- Email delivery provider configuration के बिना production reset emails नहीं पहुँचेंगे। Deployment के बाद SMTP delivery और reset link का end-to-end test करें।
+
+
+## School-wide data export (नया)
+- School Admin और Principal के लिए **School data export** sidebar link उपलब्ध है।
+- `/data-export.zip?school=<school-id>` एक ZIP डाउनलोड करता है जिसमें अलग-अलग CSV files और `manifest.json` शामिल हैं: students, classes, attendance and attendance change history, fee ledger/payments, exams/results, homework/submissions, parent-child links, staff attendance/leave, class history, transfer certificates, announcements, timetable, events और RSVPs।
+- Export हर dataset को selected school के साथ scope करता है; Parent, Student, Teacher और Accountant roles को इस endpoint पर अनुमति नहीं है। School Admin/Principal access server-side role check से नियंत्रित है।
+- CSV text cells में spreadsheet formula-injection risk कम करने के लिए basic escaping है। ZIP में credentials/passwords या uploaded file contents शामिल नहीं होते।
+- **यह complete database backup नहीं है।** Restore, file attachments, auth users/permissions और full disaster recovery के लिए अलग verified backup/restore procedure आवश्यक है। ZIP में personal/student data है; इसे सुरक्षित स्थान पर रखें और केवल अधिकृत लोगों से साझा करें।
+
+
+## Render पर आसान deployment (Blueprint)
+
+Repository में `render.yaml` जोड़ा गया है। इससे Web Service और PostgreSQL database की configuration एक जगह से बन सकती है।
+
+1. GitHub पर [My_school repository](https://github.com/pk8873/My_school) खोलें और सुनिश्चित करें कि deployment वाला commit आपकी branch में मौजूद है। यदि Render केवल `main` branch deploy करता है, तो पहले Pull Request #1 review करके उसे `main` में merge करें; या Render में branch `feat/indian-school-foundation` चुनें।
+2. [Render Dashboard](https://dashboard.render.com/) में जाएँ और **New → Blueprint** चुनें।
+3. GitHub account connect करें, `pk8873/My_school` चुनें और Blueprint deploy करें।
+4. Render `render.yaml` से `school-saathi` web service और `school-saathi-db` PostgreSQL database बनाएगा। `DJANGO_SECRET_KEY` अपने-आप generate होगा; उसे किसी से साझा न करें।
+5. Deployment पूरा होने पर Render द्वारा दिया गया `https://...onrender.com` URL खोलें। `/health/` पर `{"status":"ok"}` आना चाहिए। यदि deployment fail हो, तो Render → service → **Logs** में सबसे पहली error देखें।
+6. पहली बार login करने के लिए कोई default admin account अपने-आप नहीं बनाया जाता। Render Shell उपलब्ध हो तो उसमें `python manage.py createsuperuser` चलाएँ; अन्यथा स्थानीय trusted environment से उसी production database के लिए सुरक्षित admin setup करें। Admin password code या public chat में न रखें।
+
+### Render environment variables
+
+Blueprint इन settings को configure करता है: `DJANGO_DEBUG=False`, generated `DJANGO_SECRET_KEY`, `.onrender.com` host allowance, HTTPS CSRF origin और managed PostgreSQL `DATABASE_URL`। Production HTTPS proxy detection भी configured है।
+
+### जरूरी सीमाएँ
+
+- Free Render web service idle होने पर sleep हो सकती है, इसलिए पहली request धीमी हो सकती है।
+- Free PostgreSQL को production school records के लिए सुरक्षित/स्थायी storage न मानें। Render की वर्तमान plan limits और database expiry/backup policy deployment से पहले जाँचें; वास्तविक छात्रों का डेटा डालने से पहले paid durable database, backups और restore test सुनिश्चित करें।
+- SMTP credentials जोड़ने के बाद ही password reset emails बाहर भेजे जाएँगे; बिना SMTP configuration के production email delivery की गारंटी नहीं है।
+- `startCommand` app शुरू करने से पहले migrations चलाता है। बड़े production upgrades में migrations को अलग controlled deployment step में चलाएँ।
+- यह Blueprint deployment setup है, पूर्ण security audit या production-readiness certification नहीं। पहले synthetic/demo data से login, roles, student isolation, exports, static files और password reset test करें।
