@@ -426,6 +426,51 @@ class SchoolSubscription(models.Model):
         return f"{self.school.name} · {self.get_plan_display()} · {self.get_status_display()}"
 
 
+class StaffAttendance(models.Model):
+    class Status(models.TextChoices):
+        PRESENT = "present", "Present"
+        ABSENT = "absent", "Absent"
+        LATE = "late", "Late"
+        LEAVE = "leave", "On leave"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="staff_attendance_records")
+    staff = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="staff_attendance_records")
+    date = models.DateField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PRESENT)
+    note = models.CharField(max_length=250, blank=True)
+    marked_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="marked_staff_attendance")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-date", "staff__username"]
+        constraints = [
+            models.UniqueConstraint(fields=["school", "staff", "date"], name="unique_staff_attendance_day"),
+        ]
+        indexes = [
+            models.Index(fields=["school", "date"], name="staffatt_school_date_idx"),
+            models.Index(fields=["staff", "date"], name="staffatt_user_date_idx"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.staff_id and self.school_id and not self.staff.school_memberships.filter(
+            school_id=self.school_id, is_active=True,
+            role__in=[Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT],
+        ).exists():
+            errors["staff"] = "Staff member must have an active staff membership in this school."
+        if self.marked_by_id and self.school_id and not self.marked_by.school_memberships.filter(
+            school_id=self.school_id, is_active=True,
+            role__in=[Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL],
+        ).exists():
+            errors["marked_by"] = "Attendance must be marked by an active school admin or principal."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.staff} · {self.date} · {self.get_status_display()}"
+
+
 class StaffLeaveRequest(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
