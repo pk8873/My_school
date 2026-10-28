@@ -532,3 +532,29 @@ class TenantBoundaryTests(TestCase):
         Membership.objects.create(user=parent, school=self.a, role=Membership.Role.PARENT)
         self.client.force_login(parent)
         self.assertEqual(self.client.get("/attendance/history/").status_code, 403)
+
+
+    def test_fee_receipt_pdf_is_available_for_recorded_collection(self):
+        fee = FeeRecord.objects.create(
+            school=self.a, student=self.sa, title="Synthetic tuition fee",
+            amount="5000.00", paid_amount="1500.00", status=FeeRecord.Status.PARTIAL,
+            payment_reference="SYNTHETIC-REF-001", recorded_by=self.user_a,
+        )
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/fees/{fee.pk}/receipt.pdf")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(b"%PDF", response.content[:10])
+
+    def test_fee_receipt_pdf_rejects_zero_paid_and_other_school_record(self):
+        zero_paid = FeeRecord.objects.create(
+            school=self.a, student=self.sa, title="Synthetic unpaid fee",
+            amount="1000.00", paid_amount="0.00", status=FeeRecord.Status.PENDING,
+        )
+        other_school_fee = FeeRecord.objects.create(
+            school=self.b, student=self.sb, title="Synthetic other school fee",
+            amount="1000.00", paid_amount="1000.00", status=FeeRecord.Status.PAID,
+        )
+        self.client.force_login(self.user_a)
+        self.assertEqual(self.client.get(f"/fees/{zero_paid.pk}/receipt.pdf").status_code, 404)
+        self.assertEqual(self.client.get(f"/fees/{other_school_fee.pk}/receipt.pdf").status_code, 404)
