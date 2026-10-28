@@ -7,7 +7,7 @@ services:
     plan: free
     region: singapore
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --no-input
-    startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application --workers 2 --threads 4 --timeout 120
+    startCommand: python manage.py migrate --noinput && python manage.py bootstrap_school_admin && gunicorn config.wsgi:application --workers 2 --threads 4 --timeout 120
     healthCheckPath: /health/
     autoDeploy: true
     envVars:
