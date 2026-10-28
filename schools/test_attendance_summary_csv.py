@@ -37,7 +37,7 @@ class AttendanceSummaryCsvTests(TestCase):
         self.assertIn('attachment; filename="attendance-summary.csv"', response["Content-Disposition"])
         body = response.content.decode("utf-8-sig")
         self.assertIn("SUM-001", body)
-        self.assertIn("2,1,1,1,50.00", body)
+        self.assertIn("4,1,1,1,1,50.00", body)
         self.assertNotIn("PRIVATE-SUM", body)
 
     def test_date_range_and_class_filter(self):
@@ -48,7 +48,7 @@ class AttendanceSummaryCsvTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         body = response.content.decode("utf-8-sig")
-        self.assertIn("2,1,0,1,100.00", body)
+        self.assertIn("2,1,0,1,0,100.00", body)
 
     def test_invalid_class_or_reversed_date_range_is_rejected(self):
         self.client.force_login(self.admin)
