@@ -641,6 +641,18 @@ class TenantBoundaryTests(TestCase):
 
 
 class SchoolDataExportTests(TestCase):
+    def setUp(self):
+        self.a = School.objects.create(name="Alpha Synthetic School", slug="alpha-export")
+        self.b = School.objects.create(name="Beta Synthetic School", slug="beta-export")
+        self.user_a = User.objects.create_user(username="alpha_export_admin", password="synthetic-test-pass-123")
+        self.user_b = User.objects.create_user(username="beta_export_admin", password="synthetic-test-pass-123")
+        Membership.objects.create(user=self.user_a, school=self.a, role=Membership.Role.SCHOOL_ADMIN)
+        Membership.objects.create(user=self.user_b, school=self.b, role=Membership.Role.SCHOOL_ADMIN)
+        self.ca = ClassRoom.objects.create(school=self.a, name="Class 5", section="A", academic_year="2026-2027")
+        self.cb = ClassRoom.objects.create(school=self.b, name="Class 5", section="A", academic_year="2026-2027")
+        self.sa = Student.objects.create(school=self.a, classroom=self.ca, admission_number="A-001", first_name="Synthetic Alpha")
+        self.sb = Student.objects.create(school=self.b, classroom=self.cb, admission_number="B-001", first_name="Synthetic Beta")
+
     def test_management_user_can_download_school_scoped_csv_bundle(self):
         import io
         import zipfile
