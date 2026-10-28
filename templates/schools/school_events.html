@@ -21,7 +21,14 @@
 </section>
 {% endif %}
 <section class="panel">
-  <div class="panel-heading"><h2>Upcoming events</h2><p>Events are shown only to the intended audience in your school.</p></div>
+  <div class="panel-heading"><h2>School events</h2><p>Events are shown only to the intended audience in your school.</p></div>
+  <form method="get" class="row g-2 mb-4">
+    <input type="hidden" name="school" value="{{ membership.school_id }}">
+    <div class="col-md-7"><label class="form-label" for="event-search">Search events</label><input class="form-control" id="event-search" name="q" value="{{ search_query }}" maxlength="100" placeholder="Search title, details, or location"></div>
+    <div class="col-md-3"><label class="form-label" for="event-when">Date range</label><select class="form-select" id="event-when" name="when"><option value="upcoming" {% if date_filter == "upcoming" %}selected{% endif %}>Upcoming</option><option value="past" {% if date_filter == "past" %}selected{% endif %}>Past events</option><option value="all" {% if date_filter == "all" %}selected{% endif %}>All dates</option></select></div>
+    <div class="col-md-2 d-flex align-items-end"><button class="btn btn-outline-primary w-100" type="submit">Filter</button></div>
+  </form>
+  <p class="small text-secondary">{{ showing_event_count }} shown{% if total_matching_events > showing_event_count %} of {{ total_matching_events }} matching events (maximum 200 per view){% else %} of {{ total_matching_events }} matching events{% endif %}</p>
   {% for event in events %}
   <article class="border rounded-3 p-3 mb-3">
     <div class="d-flex flex-wrap justify-content-between gap-2"><h3 class="h5 mb-1">{{ event.title }}</h3><span class="badge bg-light text-dark">{{ event.get_audience_display }}</span></div>
@@ -48,7 +55,7 @@
     {% endif %}
   </article>
   {% empty %}
-  <div class="text-center py-5"><h3 class="h5">No upcoming events listed</h3><p class="text-secondary mb-0">When your school publishes an event for your audience, it will appear here.</p></div>
+  <div class="text-center py-5"><h3 class="h5">No matching events</h3><p class="text-secondary mb-0">Try a different search phrase or date range, or check back when your school publishes an event.</p></div>
   {% endfor %}
 </section>
 {% endblock %}
