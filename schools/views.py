@@ -518,6 +518,49 @@ def export_csv(request, report):
         filename = "students.csv"
         headers = ["Admission number", "First name", "Last name", "Class", "Section", "Active", "Admission date"]
         values = ((s.admission_number, s.first_name, s.last_name, s.classroom.name, s.classroom.section, s.is_active, s.admitted_at or "") for s in rows)
+    elif report == "attendance-summary":
+        from django.db.models import Count
+        from django.utils.dateparse import parse_date
+
+        require_roles(membership, ACADEMIC_ROLES)
+        record_filter = Q(attendance_records__school=membership.school)
+        parsed_dates = {}
+        for parameter, lookup in (("date_from", "attendance_records__date__gte"), ("date_to", "attendance_records__date__lte")):
+            raw_date = request.GET.get(parameter, "").strip()
+            if raw_date:
+                parsed = parse_date(raw_date)
+                if parsed is None:
+                    return HttpResponse("Invalid date filter. Use YYYY-MM-DD.", status=400)
+                parsed_dates[parameter] = parsed
+                record_filter &= Q(**{lookup: parsed})
+        if parsed_dates.get("date_from") and parsed_dates.get("date_to") and parsed_dates["date_from"] > parsed_dates["date_to"]:
+            return HttpResponse("date_from must be on or before date_to.", status=400)
+        classroom_id = request.GET.get("classroom", "").strip()
+        if classroom_id:
+            if not classroom_id.isdigit():
+                return HttpResponse("Invalid classroom filter.", status=400)
+        students = Student.objects.filter(school=membership.school, is_active=True).select_related("classroom")
+        if classroom_id:
+            students = students.filter(classroom_id=int(classroom_id), classroom__school=membership.school)
+        students = students.annotate(
+            total_days=Count("attendance_records", filter=record_filter),
+            present_days=Count("attendance_records", filter=record_filter & Q(attendance_records__status=AttendanceRecord.Status.PRESENT)),
+            absent_days=Count("attendance_records", filter=record_filter & Q(attendance_records__status=AttendanceRecord.Status.ABSENT)),
+            late_days=Count("attendance_records", filter=record_filter & Q(attendance_records__status=AttendanceRecord.Status.LATE)),
+            leave_days=Count("attendance_records", filter=record_filter & Q(attendance_records__status=AttendanceRecord.Status.LEAVE)),
+        ).order_by("classroom__name", "classroom__section", "first_name", "last_name")
+        filename = "attendance-summary.csv"
+        headers = ["Admission number", "Student", "Class", "Section", "Marked days", "Present", "Absent", "Late", "On leave", "Present + late percentage"]
+        def summary_values():
+            for student in students:
+                total = student.total_days
+                attended = student.present_days + student.late_days
+                percentage = f"{(attended * 100 / total):.2f}" if total else "N/A"
+                yield (
+                    student.admission_number, str(student), student.classroom.name, student.classroom.section,
+                    total, student.present_days, student.absent_days, student.late_days, student.leave_days, percentage,
+                )
+        values = summary_values()
     elif report == "attendance":
         from django.utils.dateparse import parse_date
 
