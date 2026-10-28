@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Staff attendance · School Saathi{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">PEOPLE & OPERATIONS</span><h1>Staff attendance</h1><p>Record daily staff presence and review monthly attendance totals.</p></div><span class="soft-badge">{{ membership.school.name }}</span></div>
+
+<section class="panel mb-3">
+  <div class="panel-heading"><div><h2>Monthly summary</h2><p>{{ selected_date|date:"F Y" }}</p></div></div>
+  <div class="stats-grid">
+    <div class="stat-card"><span>Present</span><strong>{{ monthly_counts.present }}</strong></div>
+    <div class="stat-card"><span>Absent</span><strong>{{ monthly_counts.absent }}</strong></div>
+    <div class="stat-card"><span>Late</span><strong>{{ monthly_counts.late }}</strong></div>
+    <div class="stat-card"><span>On leave</span><strong>{{ monthly_counts.leave }}</strong></div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-heading"><div><h2>Daily register</h2><p>{% if is_manager %}Choose a date, update each staff member, then save. Unmarked rows are left unchanged.{% else %}Your attendance records for the selected date.{% endif %}</p></div></div>
+  <form method="get" class="d-flex flex-wrap gap-2 align-items-end mb-3">
+    <input type="hidden" name="school" value="{{ membership.school_id }}">
+    <div class="form-field"><label for="attendance-date-filter">Attendance date</label><input id="attendance-date-filter" type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}" required></div>
+    <button class="btn btn-outline-primary" type="submit">View date</button>
+  </form>
+  {% if is_manager %}
+  <form method="post">
+    {% csrf_token %}<input type="hidden" name="school" value="{{ membership.school_id }}"><input type="hidden" name="action" value="save_attendance"><input type="hidden" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+  {% endif %}
+  <div class="table-responsive"><table class="table align-middle">
+    <thead><tr><th>Staff member</th><th>Status</th><th>Note</th><th>Marked by</th></tr></thead>
+    <tbody>
+    {% for item in roster %}
+      <tr>
+        <td><strong>{{ item.user.get_full_name|default:item.user.username }}</strong><div class="small text-muted">@{{ item.user.username }}</div></td>
+        <td>
+        {% if is_manager %}
+          <select class="form-select" name="status_{{ item.user.pk }}" aria-label="Attendance status for {{ item.user.username }}">
+            <option value="">— Not marked —</option>
+            {% for value,label in status_choices %}<option value="{{ value }}" {% if item.record and item.record.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        {% elif item.record %}<span class="soft-badge">{{ item.record.get_status_display }}</span>{% else %}<span class="text-muted">Not marked</span>{% endif %}
+        </td>
+        <td>{% if is_manager %}<input class="form-control" type="text" maxlength="250" name="note_{{ item.user.pk }}" value="{{ item.record.note|default:'' }}" aria-label="Note for {{ item.user.username }}">{% elif item.record %}{{ item.record.note|default:"—" }}{% else %}—{% endif %}</td>
+        <td>{% if item.record and item.record.marked_by %}{{ item.record.marked_by.get_full_name|default:item.record.marked_by.username }}{% else %}—{% endif %}</td>
+      </tr>
+    {% empty %}<tr><td colspan="4" class="text-muted">No staff members or attendance records found for this view.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {% if is_manager %}<button class="btn btn-primary" type="submit">Save staff attendance</button></form>{% endif %}
+</section>
+{% endblock %}
