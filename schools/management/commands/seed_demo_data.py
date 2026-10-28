@@ -7,7 +7,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from schools.models import (
-    Announcement, AttendanceRecord, ClassRoom, Exam, ExamResult, FeeRecord,
+    Announcement, AttendanceRecord, ClassRoom, Exam, ExamResult, FeeRecord, FeePayment,
     Homework, HomeworkSubmission, Membership, ParentStudentLink, School,
     SchoolSubscription, Student, TimetableSlot,
 )
@@ -110,10 +110,26 @@ class Command(BaseCommand):
             amount = Decimal("12000.00")
             paid = [Decimal("12000.00"), Decimal("6000.00"), Decimal("0.00")][index]
             fee_status = FeeRecord.Status.PAID if paid >= amount else (FeeRecord.Status.PARTIAL if paid > 0 else FeeRecord.Status.PENDING)
-            FeeRecord.objects.update_or_create(
+            fee, _ = FeeRecord.objects.update_or_create(
                 school=school, student=student, title="Demo Term Fee",
                 defaults={"amount": amount, "paid_amount": paid, "due_date": today + timedelta(days=14), "status": fee_status, "payment_reference": f"DEMO-NOT-A-REAL-PAYMENT-{index + 1}", "note": "Synthetic sample record; no payment processed", "recorded_by": admin},
             )
+            # These synthetic ledger rows match paid_amount; they are not real transactions.
+            payment_parts = {
+                0: [(Decimal("7000.00"), "DEMO-FEE-PAY-001-A", 20), (Decimal("5000.00"), "DEMO-FEE-PAY-001-B", 5)],
+                1: [(Decimal("3000.00"), "DEMO-FEE-PAY-002-A", 18), (Decimal("3000.00"), "DEMO-FEE-PAY-002-B", 3)],
+            }.get(index, [])
+            for part_index, (payment_amount, reference, days_ago) in enumerate(payment_parts):
+                FeePayment.objects.update_or_create(
+                    school=school, fee_record=fee, reference=reference,
+                    defaults={
+                        "amount": payment_amount,
+                        "payment_date": today - timedelta(days=days_ago),
+                        "method": FeePayment.Method.CASH if part_index == 0 else FeePayment.Method.UPI,
+                        "note": "SYNTHETIC DEMO DATA — not a real payment",
+                        "recorded_by": admin,
+                    },
+                )
 
         exam, _ = Exam.objects.get_or_create(
             school=school, title="Demo Term Examination", classroom=classroom, exam_date=today + timedelta(days=7),
