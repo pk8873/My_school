@@ -99,3 +99,27 @@ Family fee history: parent and student accounts can open `/my-fees/` to review s
 - Export हर dataset को selected school के साथ scope करता है; Parent, Student, Teacher और Accountant roles को इस endpoint पर अनुमति नहीं है। School Admin/Principal access server-side role check से नियंत्रित है।
 - CSV text cells में spreadsheet formula-injection risk कम करने के लिए basic escaping है। ZIP में credentials/passwords या uploaded file contents शामिल नहीं होते।
 - **यह complete database backup नहीं है।** Restore, file attachments, auth users/permissions और full disaster recovery के लिए अलग verified backup/restore procedure आवश्यक है। ZIP में personal/student data है; इसे सुरक्षित स्थान पर रखें और केवल अधिकृत लोगों से साझा करें।
+
+
+## Render पर आसान deployment (Blueprint)
+
+Repository में `render.yaml` जोड़ा गया है। इससे Web Service और PostgreSQL database की configuration एक जगह से बन सकती है।
+
+1. GitHub पर [My_school repository](https://github.com/pk8873/My_school) खोलें और सुनिश्चित करें कि deployment वाला commit आपकी branch में मौजूद है। यदि Render केवल `main` branch deploy करता है, तो पहले Pull Request #1 review करके उसे `main` में merge करें; या Render में branch `feat/indian-school-foundation` चुनें।
+2. [Render Dashboard](https://dashboard.render.com/) में जाएँ और **New → Blueprint** चुनें।
+3. GitHub account connect करें, `pk8873/My_school` चुनें और Blueprint deploy करें।
+4. Render `render.yaml` से `school-saathi` web service और `school-saathi-db` PostgreSQL database बनाएगा। `DJANGO_SECRET_KEY` अपने-आप generate होगा; उसे किसी से साझा न करें।
+5. Deployment पूरा होने पर Render द्वारा दिया गया `https://...onrender.com` URL खोलें। `/health/` पर `{"status":"ok"}` आना चाहिए। यदि deployment fail हो, तो Render → service → **Logs** में सबसे पहली error देखें।
+6. पहली बार login करने के लिए कोई default admin account अपने-आप नहीं बनाया जाता। Render Shell उपलब्ध हो तो उसमें `python manage.py createsuperuser` चलाएँ; अन्यथा स्थानीय trusted environment से उसी production database के लिए सुरक्षित admin setup करें। Admin password code या public chat में न रखें।
+
+### Render environment variables
+
+Blueprint इन settings को configure करता है: `DJANGO_DEBUG=False`, generated `DJANGO_SECRET_KEY`, `.onrender.com` host allowance, HTTPS CSRF origin और managed PostgreSQL `DATABASE_URL`। Production HTTPS proxy detection भी configured है।
+
+### जरूरी सीमाएँ
+
+- Free Render web service idle होने पर sleep हो सकती है, इसलिए पहली request धीमी हो सकती है।
+- Free PostgreSQL को production school records के लिए सुरक्षित/स्थायी storage न मानें। Render की वर्तमान plan limits और database expiry/backup policy deployment से पहले जाँचें; वास्तविक छात्रों का डेटा डालने से पहले paid durable database, backups और restore test सुनिश्चित करें।
+- SMTP credentials जोड़ने के बाद ही password reset emails बाहर भेजे जाएँगे; बिना SMTP configuration के production email delivery की गारंटी नहीं है।
+- `startCommand` app शुरू करने से पहले migrations चलाता है। बड़े production upgrades में migrations को अलग controlled deployment step में चलाएँ।
+- यह Blueprint deployment setup है, पूर्ण security audit या production-readiness certification नहीं। पहले synthetic/demo data से login, roles, student isolation, exports, static files और password reset test करें।
