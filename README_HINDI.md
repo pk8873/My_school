@@ -12,7 +12,7 @@
 - Individual manual fee payment history with per-entry downloadable PDF acknowledgements and school-scoped CSV export. CSV exports can be filtered by fee entry, payment date range, payment method and student/admission/reference search. Receipts are school-scoped and role-protected, and state that they acknowledge a manual ledger entry rather than verify bank/online payment. Each new entry updates the outstanding balance inside a transaction and cannot exceed the remaining balance.
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection.
 - Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation. School admins/principals manage the schedule; teachers see only assigned slots; students see their linked class; parents see linked children’s classes.
-- Tenant-scoped CSV exports for student registers, attendance (date-filterable), fee ledger and individual fee payment entries (fee/date/method/search filters), protected by role checks.
+- Tenant-scoped CSV exports for student registers, attendance (single day or date range, optional class filter), fee ledger and individual fee payment entries (fee/date/method/search filters), protected by role checks.
 - Downloadable PDF student report cards and fee statements, with school isolation and parent/student record-level permissions. Manual fee collection acknowledgement PDF is available for fee entries with a recorded paid amount; it explicitly does not verify bank or online payment.
 - Super Admin-only school onboarding that creates a tenant, its initial school-admin login and subscription plan metadata in one transaction; platform admin can edit plan/status/student limits (billing is not connected).
 - School-scoped staff/parent/student account management, parent-child links with fee/result visibility flags, and staff-managed student portal account linking.
@@ -32,7 +32,7 @@
 - Parent/student portal foundations: linked children’s attendance and fee summaries, linked student profile attendance/fee summaries, academic updates, class timetable and homework submissions.
 - Payroll, staff attendance and staff self-service. Basic school-scoped account creation and staff/family directory are implemented.
 - Bulk marks entry, homework file/photo uploads, push notifications and homework revision history. Text-based homework submission and teacher feedback are implemented.
-- Attendance history audit trail bulk attendance updates के लिए शामिल है; attendance PDF exports और advanced report filters अभी बाकी हैं.
+- Attendance history audit trail bulk attendance updates के लिए शामिल है; attendance CSV supports date ranges and optional class filter. Attendance PDF exports and advanced report filters अभी बाकी हैं.
 - Fee discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks. Individual manual payment PDF acknowledgements and payment history are implemented; gateway verification is not.
 - Full CRUD edit/delete flows, password reset/email delivery, audit logs, backups/restore and monitoring.
 - Dedicated school-scoped Django admin permissions, deployment review, accessibility review and end-to-end production tests.
