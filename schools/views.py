@@ -1184,6 +1184,69 @@ def student_id_cards_pdf(request):
     return response
 
 
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def student_transfer_certificate_draft(request):
+    """Generate a school-scoped transfer certificate draft PDF; official issuance must be verified by staff."""
+    from django.utils.dateparse import parse_date
+
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    school = membership.school
+    students = Student.objects.filter(school=school).select_related("classroom").order_by("first_name", "last_name")
+    error = ""
+    if request.method == "POST":
+        student_id = request.POST.get("student", "").strip()
+        leaving_date_raw = request.POST.get("leaving_date", "").strip()
+        reason = request.POST.get("reason", "").strip()
+        conduct = request.POST.get("conduct", "").strip()
+        remarks = request.POST.get("remarks", "").strip()
+        if not student_id.isdigit():
+            error = "Please select a student."
+        elif len(reason) > 250 or len(conduct) > 100 or len(remarks) > 500:
+            error = "Please shorten the reason, conduct, or remarks field."
+        else:
+            student = students.filter(pk=int(student_id)).first()
+            leaving_date = parse_date(leaving_date_raw) if leaving_date_raw else None
+            if student is None:
+                error = "The selected student does not belong to this school."
+            elif leaving_date_raw and leaving_date is None:
+                error = "Please enter a valid leaving date."
+            else:
+                rows = [
+                    ["Field", "Details"],
+                    ["Certificate status", "DRAFT — verify all details before official issue"],
+                    ["School", school.name],
+                    ["School address", school.address or "Not provided"],
+                    ["School phone", school.phone or "Not provided"],
+                    ["Student name", str(student)],
+                    ["Admission number", student.admission_number],
+                    ["Date of birth", student.date_of_birth.isoformat() if student.date_of_birth else "Not recorded"],
+                    ["Class / academic year", f"{student.classroom} / {student.classroom.academic_year}"],
+                    ["Date of admission", student.admitted_at.isoformat() if student.admitted_at else "Not recorded"],
+                    ["Date of leaving", leaving_date.isoformat() if leaving_date else "Not specified"],
+                    ["Reason for leaving", reason or "Not specified"],
+                    ["Conduct", conduct or "Not assessed"],
+                    ["Remarks", remarks or "—"],
+                    ["Prepared on", timezone.localdate().isoformat()],
+                    ["Authorised signatory", "________________________________"],
+                    ["School seal", "________________________________"],
+                ]
+                response = _build_pdf(
+                    "TRANSFER CERTIFICATE — DRAFT",
+                    "Draft only. School management must verify records and approve before official issuance.",
+                    rows,
+                    filename=f"transfer-certificate-draft-{student.admission_number}.pdf",
+                )
+                response["Cache-Control"] = "private, no-store"
+                return response
+    return render(request, "schools/student_transfer_certificate.html", {
+        "membership": membership, "students": students, "error": error,
+        "today": timezone.localdate().isoformat(),
+    })
+
+
 @login_required
 @require_GET
 def student_fee_statement_pdf(request, student_id):
