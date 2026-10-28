@@ -7,7 +7,7 @@
 - School, class, student और parent-student link data models.
 - Responsive dashboard: student/class count, आज की attendance count, fee ledger summary और quick actions.
 - School admin/principal के लिए class creation और student admission/search.
-- School admin/principal/teacher के लिए daily attendance entry और date-wise register.
+- School admin/principal/teacher के लिए daily attendance entry, date-wise register और class-wise bulk attendance marking; bulk save उसी class/date के मौजूदा records को update करता है.
 - School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance.
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection.
 - Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation. School admins/principals manage the schedule; teachers see only assigned slots; students see their linked class; parents see linked children’s classes.
@@ -31,7 +31,7 @@
 - Parent/student portal foundations: linked children’s attendance and fee summaries, linked student profile attendance/fee summaries, academic updates, class timetable and homework submissions.
 - Payroll, staff attendance and staff self-service. Basic school-scoped account creation and staff/family directory are implemented.
 - Bulk marks entry, homework file/photo uploads, push notifications and homework revision history. Text-based homework submission and teacher feedback are implemented.
-- Attendance bulk marking, edit/correction audit trail, PDF exports and advanced report filters.
+- Attendance edit/correction audit trail, PDF exports and advanced report filters.
 - Fee receipts/PDF, discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks.
 - Full CRUD edit/delete flows, password reset/email delivery, audit logs, backups/restore and monitoring.
 - Dedicated school-scoped Django admin permissions, deployment review, accessibility review and end-to-end production tests.
