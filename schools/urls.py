@@ -11,6 +11,7 @@ urlpatterns = [
     path("students/", views.students, name="students"),
     path("students/transfer-certificate/", views.student_transfer_certificate_draft, name="student_transfer_certificate_draft"),
     path("students/transfer-certificates/", views.transfer_certificate_register, name="transfer_certificate_register"),
+    path("students/transfer-certificates.csv", views.transfer_certificate_register_csv, name="transfer_certificate_register_csv"),
     path("students/promotions/", views.student_promotions, name="student_promotions"),
     path("students/id-cards.pdf", views.student_id_cards_pdf, name="student_id_cards_pdf"),
     path("students/import/", views.import_students_csv, name="import_students_csv"),
