@@ -253,9 +253,36 @@ def fees(request):
         record.save()
         messages.success(request, "Fee record saved. This is a manual record; no online payment was processed.")
         return redirect(f"{request.path}?school={membership.school_id}")
-    rows = FeeRecord.objects.filter(school=membership.school).select_related("student", "student__classroom")
-    totals = rows.aggregate(total=Sum("amount"), collected=Sum("paid_amount"))
-    return render(request, "schools/fees.html", {"membership": membership, "form": form, "fees": rows[:200], "total_amount": totals["total"] or 0, "collected_amount": totals["collected"] or 0})
+    all_rows = FeeRecord.objects.filter(school=membership.school).select_related("student", "student__classroom")
+    totals = all_rows.aggregate(total=Sum("amount"), collected=Sum("paid_amount"))
+    rows = all_rows
+    query = request.GET.get("q", "").strip()[:100]
+    selected_status = request.GET.get("status", "").strip()
+    overdue_only = request.GET.get("overdue") == "1"
+    valid_statuses = {value for value, _label in FeeRecord.Status.choices}
+    if selected_status in valid_statuses:
+        rows = rows.filter(status=selected_status)
+    else:
+        selected_status = ""
+    if overdue_only:
+        rows = rows.filter(
+            due_date__lt=timezone.localdate(),
+            paid_amount__lt=F("amount"),
+            status__in=[FeeRecord.Status.PENDING, FeeRecord.Status.PARTIAL],
+        )
+    if query:
+        rows = rows.filter(
+            Q(student__first_name__icontains=query)
+            | Q(student__last_name__icontains=query)
+            | Q(student__admission_number__icontains=query)
+            | Q(title__icontains=query)
+        )
+    return render(request, "schools/fees.html", {
+        "membership": membership, "form": form, "fees": rows[:200],
+        "total_amount": totals["total"] or 0, "collected_amount": totals["collected"] or 0,
+        "fee_query": query, "selected_status": selected_status, "overdue_only": overdue_only,
+        "fee_result_count": rows.count(),
+    })
 
 
 
