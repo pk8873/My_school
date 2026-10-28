@@ -911,3 +911,119 @@ def staff_management(request):
         "membership": membership, "form": form, "link_form": link_form, "student_link_form": student_link_form,
         "staff_rows": staff_rows, "parent_links": parent_links,
     })
+
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def import_students_csv(request):
+    """Import a validated CSV batch atomically; never partially import a bad file."""
+    import csv
+    import io
+    from datetime import date
+    from django.core.exceptions import ValidationError
+    from django.db import IntegrityError
+
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    error = ""
+    imported_count = 0
+    required_headers = {
+        "admission_number", "first_name", "last_name", "class_name",
+        "section", "academic_year", "date_of_birth", "admitted_at", "is_active",
+    }
+    if request.method == "POST":
+        upload = request.FILES.get("csv_file")
+        if not upload:
+            error = "Choose a CSV file to import."
+        elif upload.size > 1_000_000:
+            error = "CSV file must be 1 MB or smaller."
+        else:
+            try:
+                decoded = upload.read().decode("utf-8-sig")
+                reader = csv.DictReader(io.StringIO(decoded, newline=""))
+                headers = {h.strip() for h in (reader.fieldnames or []) if h}
+                if not required_headers.issubset(headers):
+                    error = "CSV headers are missing. Download the sample template and keep all required columns."
+                else:
+                    raw_rows = list(reader)
+                    if not raw_rows:
+                        error = "The CSV has no student rows."
+                    elif len(raw_rows) > 500:
+                        error = "Import is limited to 500 students per file."
+                    else:
+                        classes = {
+                            (c.name.casefold(), c.section.casefold(), c.academic_year.casefold()): c
+                            for c in ClassRoom.objects.filter(school=membership.school, is_active=True)
+                        }
+                        existing_numbers = set(
+                            Student.objects.filter(school=membership.school)
+                            .values_list("admission_number", flat=True)
+                        )
+                        seen_numbers = set()
+                        prepared = []
+                        for line_number, row in enumerate(raw_rows, start=2):
+                            row = {str(k).strip(): (v or "").strip() for k, v in row.items() if k is not None}
+                            admission_number = row.get("admission_number", "")
+                            first_name = row.get("first_name", "")
+                            if not admission_number or not first_name:
+                                error = f"Row {line_number}: admission_number and first_name are required."
+                                break
+                            if len(admission_number) > 40 or len(first_name) > 100 or len(row.get("last_name", "")) > 100:
+                                error = f"Row {line_number}: a name or admission number is too long."
+                                break
+                            key_number = admission_number.casefold()
+                            if key_number in seen_numbers or admission_number in existing_numbers:
+                                error = f"Row {line_number}: duplicate admission number '{admission_number}'. No rows were imported."
+                                break
+                            seen_numbers.add(key_number)
+                            class_key = (row.get("class_name", "").casefold(), row.get("section", "").casefold(), row.get("academic_year", "").casefold())
+                            classroom = classes.get(class_key)
+                            if classroom is None:
+                                error = f"Row {line_number}: class/section/year does not match an active class in this school."
+                                break
+                            parsed_dates = {}
+                            for field in ("date_of_birth", "admitted_at"):
+                                raw = row.get(field, "")
+                                if raw:
+                                    try:
+                                        parsed_dates[field] = date.fromisoformat(raw)
+                                    except ValueError:
+                                        error = f"Row {line_number}: {field} must use YYYY-MM-DD or be blank."
+                                        break
+                                else:
+                                    parsed_dates[field] = None
+                            if error:
+                                break
+                            active_raw = row.get("is_active", "true").casefold()
+                            if active_raw not in {"true", "false", "1", "0", "yes", "no"}:
+                                error = f"Row {line_number}: is_active must be true/false, yes/no, 1/0, or blank."
+                                break
+                            prepared.append(Student(
+                                school=membership.school, classroom=classroom,
+                                admission_number=admission_number, first_name=first_name,
+                                last_name=row.get("last_name", ""), date_of_birth=parsed_dates["date_of_birth"],
+                                admitted_at=parsed_dates["admitted_at"],
+                                is_active=active_raw not in {"false", "0", "no"},
+                            ))
+                        subscription = getattr(membership.school, "subscription", None)
+                        current_count = Student.objects.filter(school=membership.school).count()
+                        if not error and subscription and subscription.student_limit and current_count + len(prepared) > subscription.student_limit:
+                            error = f"Import would exceed this school's plan limit of {subscription.student_limit} students."
+                        if not error:
+                            try:
+                                with transaction.atomic():
+                                    for student in prepared:
+                                        student.full_clean()
+                                    Student.objects.bulk_create(prepared, batch_size=100)
+                            except (ValidationError, IntegrityError) as exc:
+                                error = "Import was not completed because one or more rows failed validation. Check class names, admission numbers and required values."
+                            else:
+                                imported_count = len(prepared)
+                                messages.success(request, f"Imported {imported_count} students successfully. No existing records were changed.")
+                                return redirect(f"/students/?school={membership.school_id}")
+            except (UnicodeDecodeError, csv.Error):
+                error = "Could not read this file as a UTF-8 CSV. Save it as CSV UTF-8 and try again."
+    return render(request, "schools/student_import.html", {
+        "membership": membership, "error": error, "required_headers": sorted(required_headers),
+    })
