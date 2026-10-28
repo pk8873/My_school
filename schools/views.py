@@ -473,6 +473,8 @@ def school_events(request):
     rsvp_map = dict(SchoolEventRSVP.objects.filter(
         event__in=events, user=request.user
     ).values_list("event_id", "response"))
+    for event in events:
+        event.my_rsvp = rsvp_map.get(event.pk, "")
     if management:
         for event in events:
             event.attending_count = event.rsvps.filter(response=SchoolEventRSVP.Response.ATTENDING).count()
