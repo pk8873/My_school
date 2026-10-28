@@ -172,6 +172,42 @@ class FeeRecord(models.Model):
 
 
 
+class FeePayment(models.Model):
+    class Method(models.TextChoices):
+        CASH = "cash", "Cash"
+        UPI = "upi", "UPI (manually verified)"
+        BANK = "bank", "Bank transfer (manually verified)"
+        CHEQUE = "cheque", "Cheque"
+        OTHER = "other", "Other"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="fee_payments")
+    fee_record = models.ForeignKey(FeeRecord, on_delete=models.PROTECT, related_name="payments")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_date = models.DateField(default=timezone.localdate)
+    method = models.CharField(max_length=10, choices=Method.choices, default=Method.CASH)
+    reference = models.CharField(max_length=100, blank=True)
+    note = models.CharField(max_length=250, blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-payment_date", "-created_at"]
+        indexes = [models.Index(fields=["school", "payment_date"], name="feepay_school_date_idx")]
+
+    def clean(self):
+        errors = {}
+        if self.fee_record_id and self.school_id and self.fee_record.school_id != self.school_id:
+            errors["fee_record"] = "Fee entry must belong to the same school."
+        if self.amount is not None and self.amount <= 0:
+            errors["amount"] = "Payment amount must be greater than zero."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.fee_record} · {self.amount} · {self.payment_date}"
+
+
+
 class Exam(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="exams")
     title = models.CharField(max_length=160)
