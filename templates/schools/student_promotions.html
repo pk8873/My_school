@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Student Promotion · School Saathi{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><span class="eyebrow">ACADEMIC ADMINISTRATION</span><h1>Student promotion & class transfer</h1><p>Move active students to another class and keep a permanent record of the change.</p></div>
+  <a class="btn btn-outline-secondary" href="{% url 'students' %}?school={{ membership.school_id }}">Back to students</a>
+</div>
+
+<section class="panel mb-3">
+  <div class="panel-heading"><h2>Promote a class</h2><p>This action moves every active student from the selected current class. Review both classes before submitting.</p></div>
+  {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" class="row g-3">
+    {% csrf_token %}
+    <input type="hidden" name="school" value="{{ membership.school_id }}">
+    <div class="col-12 col-md-6">
+      <label class="form-label" for="from-classroom">Current class</label>
+      <select class="form-select" id="from-classroom" name="from_classroom" required>
+        <option value="">Select current class</option>
+        {% for classroom in classrooms %}<option value="{{ classroom.pk }}">{{ classroom.name }} {{ classroom.section }} · {{ classroom.academic_year }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-6">
+      <label class="form-label" for="to-classroom">Destination class</label>
+      <select class="form-select" id="to-classroom" name="to_classroom" required>
+        <option value="">Select destination class</option>
+        {% for classroom in classrooms %}<option value="{{ classroom.pk }}">{{ classroom.name }} {{ classroom.section }} · {{ classroom.academic_year }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-6">
+      <label class="form-label" for="effective-date">Effective date</label>
+      <input class="form-control" id="effective-date" type="date" name="effective_date" value="{{ today }}" required>
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="promotion-note">Note (optional)</label>
+      <input class="form-control" id="promotion-note" name="note" maxlength="500" placeholder="Example: promoted for academic year 2027–2028">
+    </div>
+    <div class="col-12"><div class="alert alert-warning mb-0">Before you submit: all active students in the current class will be moved together. This does not change fee records, exam results, attendance history, or parent links.</div></div>
+    <div class="col-12"><button class="btn btn-primary" type="submit" onclick="return confirm('Move all active students from the selected class to the destination class? This action will update each student record.');">Promote selected class</button></div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-heading"><h2>Recent promotion history</h2><p>Latest 100 class changes recorded for this school.</p></div>
+  <div class="table-responsive"><table class="table table-hover align-middle">
+    <thead><tr><th>Date</th><th>Student</th><th>Admission no.</th><th>From class</th><th>To class</th><th>Recorded by</th><th>Note</th></tr></thead>
+    <tbody>
+    {% for item in history %}
+      <tr><td>{{ item.effective_date }}</td><td>{{ item.student.first_name }} {{ item.student.last_name }}</td><td>{{ item.student.admission_number }}</td><td>{{ item.from_classroom.name }} {{ item.from_classroom.section }}</td><td>{{ item.to_classroom.name }} {{ item.to_classroom.section }}</td><td>{{ item.promoted_by|default:"—" }}</td><td>{{ item.note|default:"—" }}</td></tr>
+    {% empty %}<tr><td colspan="7" class="text-secondary">No promotion or class-transfer history yet.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endblock %}
