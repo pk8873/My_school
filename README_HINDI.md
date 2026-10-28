@@ -78,3 +78,6 @@ Before a public launch, configure a strong `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=Fa
 
 
 School events calendar supports search by title, description, and location, with upcoming/past/all date filters. Search results remain school-scoped and audience-filtered.
+
+
+Family fee history: parent and student accounts can open `/my-fees/` to review school-scoped fee balances and manually recorded payment entries. Parents only see active linked children with `can_view_fees`; students only see their own portal-linked record. The page is read-only and does not process online payments. Existing fee statement/acknowledgement PDFs remain informational records, not bank verification.
