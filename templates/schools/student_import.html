@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Import students · School Saathi{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">STUDENT DIRECTORY</span><h1>Bulk import students</h1><p>Upload a UTF-8 CSV file to create student admissions for this school.</p></div><a class="btn btn-outline-secondary" href="{% url 'students' %}?school={{ membership.school_id }}">Back to students</a></div>
+<section class="panel mb-3"><div class="panel-heading"><h2>CSV format</h2><p>Required column headers (keep these exact names):</p></div><code>admission_number,first_name,last_name,class_name,section,academic_year,date_of_birth,admitted_at,is_active</code><p class="form-note mt-3">Dates use YYYY-MM-DD or remain blank. Match class name, section and academic year to an active class in this school. Use true/false for is_active. Maximum file size 1 MB and 500 students per import. Existing admission numbers are never overwritten.</p><p><strong>Sample row:</strong> STU-1001,Anita,Kumar,Class 4,A,2026-2027,2016-08-12,2026-04-01,true</p></section>
+{% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+<section class="panel"><div class="panel-heading"><h2>Upload CSV</h2><p>Import is all-or-nothing: if any row is invalid, no new students are saved.</p></div><form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="school" value="{{ membership.school_id }}"><label class="form-label" for="csv-file">CSV file</label><input class="form-control mb-3" id="csv-file" type="file" name="csv_file" accept=".csv,text/csv" required><button class="btn btn-primary" type="submit">Validate and import</button></form></section>
+{% endblock %}
