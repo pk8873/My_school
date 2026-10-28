@@ -31,7 +31,7 @@
 ## अभी बाकी महत्वपूर्ण modules
 - Automated recurring billing, payment provider integration/webhooks and subscription lifecycle enforcement (Super Admin onboarding, plan metadata and student-limit checks are implemented; paid billing is not connected).
 - Parent/student portal foundations: linked children’s attendance and fee summaries, linked student profile attendance/fee summaries, academic updates, class timetable and homework submissions.
-- Payroll, staff attendance and staff self-service. Basic school-scoped account creation and staff/family directory are implemented.
+- Payroll and staff attendance. Staff leave self-service is implemented: teachers/accountants can submit requests and school admins/principals can approve or reject them with a review note.
 - Bulk marks entry, homework file/photo uploads, push notifications and homework revision history. Text-based homework submission and teacher feedback are implemented.
 - Attendance history audit trail bulk attendance updates के लिए शामिल है; attendance CSV supports date ranges and optional class filter. Attendance PDF exports and advanced report filters अभी बाकी हैं.
 - Fee discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks. Individual manual payment PDF acknowledgements and payment history are implemented; gateway verification is not.
