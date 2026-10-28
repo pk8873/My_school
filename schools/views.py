@@ -12,6 +12,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
 from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory, TransferCertificate, Announcement, AnnouncementRead, SchoolEvent, SchoolEventRSVP
 from .tenant import active_memberships
+from .data_export import build_school_export
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
 MANAGEMENT_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL}
@@ -2097,3 +2098,19 @@ def staff_leave(request):
     return render(request, "schools/staff_leave.html", {
         "membership": membership, "is_manager": is_manager, "leave_requests": rows[:200],
     })
+
+
+
+@login_required
+@require_GET
+def school_data_export(request):
+    """Download a tenant-scoped CSV bundle; only school management can export it."""
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    archive = build_school_export(membership.school)
+    response = HttpResponse(archive, content_type="application/zip")
+    filename = f"school-saathi-{membership.school.slug}-export-{timezone.localdate().isoformat()}.zip"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
