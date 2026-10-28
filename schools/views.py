@@ -1186,6 +1186,53 @@ def student_id_cards_pdf(request):
 
 
 
+
+@login_required
+@require_GET
+def transfer_certificate_register_csv(request):
+    """Export the current school's transfer certificate register as spreadsheet-safe CSV."""
+    import csv
+
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    status = request.GET.get("status", "").strip()
+    valid_statuses = {value for value, _label in TransferCertificate.Status.choices}
+    if status and status not in valid_statuses:
+        return HttpResponse("Invalid status filter.", status=400)
+    records = TransferCertificate.objects.filter(school=membership.school).select_related(
+        "student", "student__classroom", "issued_by", "cancelled_by"
+    ).order_by("-issue_date", "-created_at")
+    if status:
+        records = records.filter(status=status)
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="transfer-certificate-register.csv"'
+    response["Cache-Control"] = "private, no-store"
+    response.write("\\ufeff")
+    writer = csv.writer(response)
+    writer.writerow([
+        "Certificate Number", "Student Name", "Admission Number", "Class",
+        "Issue Date", "Leaving Date", "Reason", "Conduct", "Remarks",
+        "Status", "Issued By", "Cancelled By", "Cancelled At",
+    ])
+    for record in records.iterator():
+        writer.writerow([safe_csv_cell(value) for value in [
+            record.certificate_number,
+            str(record.student),
+            record.student.admission_number,
+            str(record.student.classroom),
+            record.issue_date.isoformat() if record.issue_date else "",
+            record.leaving_date.isoformat() if record.leaving_date else "",
+            record.reason,
+            record.conduct,
+            record.remarks,
+            record.get_status_display(),
+            str(record.issued_by or ""),
+            str(record.cancelled_by or ""),
+            record.cancelled_at.isoformat() if record.cancelled_at else "",
+        ]])
+    return response
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def transfer_certificate_register(request):
