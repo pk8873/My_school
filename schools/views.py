@@ -1613,6 +1613,43 @@ def student_fee_statement_pdf(request, student_id):
     return _build_pdf("Student Fee Statement", subtitle, table_rows, filename=f"fee-statement-{student.admission_number}.pdf")
 
 @login_required
+@require_GET
+def my_fee_history(request):
+    """Read-only fee and recorded-payment history for a parent or student portal."""
+    membership = get_membership(request)
+    if membership.role == Membership.Role.PARENT:
+        student_ids = ParentStudentLink.objects.filter(
+            parent=request.user, is_active=True, can_view_fees=True,
+            student__school=membership.school, student__is_active=True,
+        ).values_list("student_id", flat=True)
+    elif membership.role == Membership.Role.STUDENT:
+        student_ids = Student.objects.filter(
+            school=membership.school, portal_user=request.user, is_active=True,
+        ).values_list("pk", flat=True)
+    else:
+        raise PermissionDenied("This page is available to parent and student accounts.")
+
+    fee_records = FeeRecord.objects.filter(
+        school=membership.school, student_id__in=student_ids
+    ).select_related("student", "student__classroom").order_by(
+        "student__first_name", "student__last_name", "due_date", "title"
+    )
+    payments = FeePayment.objects.filter(
+        school=membership.school, fee_record__in=fee_records
+    ).select_related("fee_record", "fee_record__student").order_by("-payment_date", "-created_at")[:200]
+    totals = fee_records.aggregate(total=Sum("amount"), paid=Sum("paid_amount"))
+    return render(request, "schools/my_fee_history.html", {
+        "membership": membership,
+        "fee_records": fee_records[:200],
+        "payments": payments,
+        "total_amount": totals["total"] or 0,
+        "total_paid": totals["paid"] or 0,
+        "total_balance": (totals["total"] or 0) - (totals["paid"] or 0),
+        "showing_payment_limit": payments.count() == 200,
+    })
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def fee_payment_history(request, fee_id):
     """View an individual fee's manual payment history and record a new collection."""
