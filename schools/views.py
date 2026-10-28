@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
-from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory, TransferCertificate
+from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory, TransferCertificate, AnnouncementRead
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -348,6 +348,46 @@ def fees(request):
         "total_amount": totals["total"] or 0, "collected_amount": totals["collected"] or 0,
         "fee_query": query, "selected_status": selected_status, "overdue_only": overdue_only,
         "fee_result_count": rows.count(),
+    })
+
+
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def announcement_inbox(request):
+    """Show only published announcements intended for the signed-in user's school role."""
+    membership = get_membership(request)
+    role = membership.role
+    if role == Membership.Role.PARENT:
+        allowed_audiences = ["everyone", "parents"]
+    elif role == Membership.Role.STUDENT:
+        allowed_audiences = ["everyone", "students"]
+    elif role in {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER}:
+        allowed_audiences = ["everyone", "staff"]
+    else:
+        raise PermissionDenied("Your role cannot access the announcement inbox.")
+
+    announcements = Announcement.objects.filter(
+        school=membership.school, is_published=True, audience__in=allowed_audiences
+    ).order_by("-published_at", "-pk")
+    if request.method == "POST":
+        announcement_id = request.POST.get("announcement_id", "").strip()
+        item = announcements.filter(pk=announcement_id).first() if announcement_id.isdigit() else None
+        if item is None:
+            raise PermissionDenied("This announcement is not available to your account.")
+        AnnouncementRead.objects.get_or_create(announcement=item, user=request.user)
+        messages.success(request, "Announcement marked as read.")
+        return redirect(f"{request.path}?school={membership.school_id}")
+
+    read_ids = set(AnnouncementRead.objects.filter(
+        user=request.user, announcement__in=announcements
+    ).values_list("announcement_id", flat=True))
+    items = [{"announcement": item, "is_read": item.pk in read_ids} for item in announcements[:200]]
+    return render(request, "schools/announcement_inbox.html", {
+        "membership": membership,
+        "items": items,
+        "unread_count": sum(1 for item in items if not item["is_read"]),
     })
 
 
