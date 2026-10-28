@@ -3,7 +3,8 @@
 ## इस अपडेट में क्या शामिल है
 यह अभी भी **development / early-access build** है, production-ready SaaS नहीं। इस चरण में शामिल हैं:
 
-- Django login और school membership आधारित tenant selection.
+- Django login और school membership आधारित tenant selection; sign-in page से secure password reset flow, expiring single-use token और non-enumerating response.
+- Password reset email configuration: local development में console backend; production में SMTP environment variables से configure किया जा सकता है.
 - School, class, student और parent-student link data models.
 - Responsive dashboard: student/class count, आज की attendance count, fee ledger summary और quick actions.
 - School admin/principal के लिए class creation और student admission/search. Bulk student CSV import validates up to 500 rows atomically, checks school-local class/admission numbers and student plan limits, and never partially imports an invalid file. Student promotion/class transfer is also available for management roles: move up to 2,000 active students from one school class to another in one transaction, with per-student dated history and a note.
@@ -81,3 +82,12 @@ School events calendar supports search by title, description, and location, with
 
 
 Family fee history: parent and student accounts can open `/my-fees/` to review school-scoped fee balances and manually recorded payment entries. Parents only see active linked children with `can_view_fees`; students only see their own portal-linked record. The page is read-only and does not process online payments. Existing fee statement/acknowledgement PDFs remain informational records, not bank verification.
+
+
+## Password reset email setup (नया)
+- Login page पर **Forgot your password?** link उपलब्ध है।
+- Reset token Django के built-in password-reset flow से बनता है; link expiry `PASSWORD_RESET_TIMEOUT` से नियंत्रित होती है (default 24 घंटे)।
+- Unknown email address पर भी वही confirmation page दिखता है, ताकि account existence reveal न हो।
+- Local development में reset link PowerShell terminal में दिखाई देता है; email वास्तव में भेजा नहीं जाता।
+- Production में `.env` या hosting environment में `EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` और वास्तविक `DEFAULT_FROM_EMAIL` सेट करें। SMTP credentials को GitHub में commit न करें।
+- Email delivery provider configuration के बिना production reset emails नहीं पहुँचेंगे। Deployment के बाद SMTP delivery और reset link का end-to-end test करें।
