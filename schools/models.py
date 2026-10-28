@@ -107,6 +107,28 @@ class AttendanceRecord(models.Model):
         return f"{self.student} · {self.date} · {self.get_status_display()}"
 
 
+class AttendanceChangeLog(models.Model):
+    """Immutable snapshot of attendance creation or correction."""
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="attendance_change_logs")
+    attendance = models.ForeignKey(AttendanceRecord, on_delete=models.SET_NULL, null=True, blank=True, related_name="change_logs")
+    student_name = models.CharField(max_length=220)
+    admission_number = models.CharField(max_length=40)
+    attendance_date = models.DateField()
+    old_status = models.CharField(max_length=10, blank=True, choices=AttendanceRecord.Status.choices)
+    new_status = models.CharField(max_length=10, choices=AttendanceRecord.Status.choices)
+    old_note = models.CharField(max_length=250, blank=True)
+    new_note = models.CharField(max_length=250, blank=True)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="attendance_changes")
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-changed_at"]
+        indexes = [models.Index(fields=["school", "attendance_date"], name="attlog_school_date_idx")]
+
+    def __str__(self):
+        return f"{self.student_name} · {self.attendance_date} · {self.old_status or 'new'} → {self.new_status}"
+
+
 class FeeRecord(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
