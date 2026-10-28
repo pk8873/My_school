@@ -361,12 +361,14 @@ class TenantBoundaryTests(TestCase):
 
     def test_seed_demo_data_is_repeatable_and_synthetic(self):
         from django.core.management import call_command
+        from django.test import override_settings
         from .models import Homework, School
-        call_command("seed_demo_data", verbosity=0)
-        school = School.objects.get(slug="school-saathi-demo")
-        first_student_count = Student.objects.filter(school=school).count()
-        first_homework_count = Homework.objects.filter(school=school).count()
-        call_command("seed_demo_data", verbosity=0)
+        with override_settings(DEBUG=True):
+            call_command("seed_demo_data", verbosity=0)
+            school = School.objects.get(slug="school-saathi-demo")
+            first_student_count = Student.objects.filter(school=school).count()
+            first_homework_count = Homework.objects.filter(school=school).count()
+            call_command("seed_demo_data", verbosity=0)
         self.assertEqual(Student.objects.filter(school=school).count(), first_student_count)
         self.assertEqual(Homework.objects.filter(school=school).count(), first_homework_count)
         self.assertEqual(first_student_count, 3)
