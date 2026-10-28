@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Bulk Attendance · School Saathi{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><span class="eyebrow">DAILY ACADEMICS</span><h1>Bulk attendance</h1><p>Mark an entire class for one date, then save all records together.</p></div>
+  <a class="btn btn-outline-primary" href="{% url 'attendance' %}?school={{ membership.school_id }}">Individual attendance</a>
+</div>
+<section class="panel mb-4">
+  <div class="panel-heading"><div><h2>Choose class and date</h2><p>Only active students from your selected school and class are shown.</p></div></div>
+  <form method="get" class="row g-3 align-items-end">
+    <input type="hidden" name="school" value="{{ membership.school_id }}">
+    <div class="col-12 col-md-5"><label for="{{ form.classroom.id_for_label }}">Class</label>{{ form.classroom }}{{ form.classroom.errors }}</div>
+    <div class="col-12 col-md-4"><label for="{{ form.date.id_for_label }}">Date</label>{{ form.date }}{{ form.date.errors }}</div>
+    <div class="col-12 col-md-3"><button class="btn btn-primary w-100" type="submit">Load class</button></div>
+  </form>
+</section>
+{% if students %}
+<section class="panel">
+  <div class="panel-heading"><div><h2>Student register</h2><p>{{ students|length }} active student{{ students|length|pluralize }} · {{ selected_date }}</p></div></div>
+  <form method="post">
+    {% csrf_token %}<input type="hidden" name="school" value="{{ membership.school_id }}">
+    <input type="hidden" name="classroom" value="{{ form.classroom.value }}">
+    <input type="hidden" name="date" value="{{ selected_date }}">
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="table-responsive"><table class="table table-hover align-middle">
+      <thead><tr><th>Admission No.</th><th>Student</th><th>Attendance status</th><th>Note (optional)</th></tr></thead>
+      <tbody>{% for student in students %}{% with record=existing|get_item:student.pk %}{% endwith %}
+      <tr><td>{{ student.admission_number }}</td><td><strong>{{ student.first_name }} {{ student.last_name }}</strong></td>
+      <td><select class="form-select" name="status_{{ student.pk }}" required>
+        {% for key,label in status_choices %}<option value="{{ key }}" {% if existing|get_item:student.pk and existing|get_item:student.pk.status == key %}selected{% elif not existing|get_item:student.pk and key == "present" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></td>
+      <td><input class="form-control" name="note_{{ student.pk }}" maxlength="250" value="{% if existing|get_item:student.pk %}{{ existing|get_item:student.pk.note }}{% endif %}" placeholder="Optional note"></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <button class="btn btn-primary" type="submit">Save attendance for all students</button>
+  </form>
+</section>
+{% elif form.is_bound and form.is_valid %}
+<section class="panel"><p class="empty-state">No active students were found in this class.</p></section>
+{% endif %}
+{% endblock %}
