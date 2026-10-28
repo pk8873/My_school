@@ -91,3 +91,11 @@ Family fee history: parent and student accounts can open `/my-fees/` to review s
 - Local development में reset link PowerShell terminal में दिखाई देता है; email वास्तव में भेजा नहीं जाता।
 - Production में `.env` या hosting environment में `EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS` और वास्तविक `DEFAULT_FROM_EMAIL` सेट करें। SMTP credentials को GitHub में commit न करें।
 - Email delivery provider configuration के बिना production reset emails नहीं पहुँचेंगे। Deployment के बाद SMTP delivery और reset link का end-to-end test करें।
+
+
+## School-wide data export (नया)
+- School Admin और Principal के लिए **School data export** sidebar link उपलब्ध है।
+- `/data-export.zip?school=<school-id>` एक ZIP डाउनलोड करता है जिसमें अलग-अलग CSV files और `manifest.json` शामिल हैं: students, classes, attendance and attendance change history, fee ledger/payments, exams/results, homework/submissions, parent-child links, staff attendance/leave, class history, transfer certificates, announcements, timetable, events और RSVPs।
+- Export हर dataset को selected school के साथ scope करता है; Parent, Student, Teacher और Accountant roles को इस endpoint पर अनुमति नहीं है। School Admin/Principal access server-side role check से नियंत्रित है।
+- CSV text cells में spreadsheet formula-injection risk कम करने के लिए basic escaping है। ZIP में credentials/passwords या uploaded file contents शामिल नहीं होते।
+- **यह complete database backup नहीं है।** Restore, file attachments, auth users/permissions और full disaster recovery के लिए अलग verified backup/restore procedure आवश्यक है। ZIP में personal/student data है; इसे सुरक्षित स्थान पर रखें और केवल अधिकृत लोगों से साझा करें।
