@@ -91,7 +91,6 @@ def classrooms(request):
 @require_http_methods(["GET", "POST"])
 def student_promotions(request):
     """Bulk-promote active students between classes and retain a per-student audit history."""
-    from datetime import date
     from django.utils.dateparse import parse_date
 
     membership = get_membership(request)
@@ -148,7 +147,7 @@ def student_promotions(request):
     }
     return render(request, "schools/student_promotions.html", {
         "membership": membership, "classrooms": classrooms, "history": history,
-        "source_counts": source_counts, "today": date.today().isoformat(), "error": error,
+        "source_counts": source_counts, "today": timezone.localdate().isoformat(), "error": error,
     })
 
 
