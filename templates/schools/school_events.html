@@ -27,7 +27,24 @@
     <div class="d-flex flex-wrap justify-content-between gap-2"><h3 class="h5 mb-1">{{ event.title }}</h3><span class="badge bg-light text-dark">{{ event.get_audience_display }}</span></div>
     <p class="text-secondary small mb-2">{{ event.starts_at|date:"D, d M Y · h:i A" }}{% if event.ends_at %} – {{ event.ends_at|date:"h:i A" }}{% endif %}</p>
     {% if event.location %}<p class="mb-2"><strong>Location:</strong> {{ event.location }}</p>{% endif %}
-    {% if event.description %}<div>{{ event.description|linebreaksbr }}</div>{% endif %}
+    {% if event.description %}<div class="mb-3">{{ event.description|linebreaksbr }}</div>{% endif %}
+    {% if can_manage %}
+      <div class="small text-secondary mb-2">Responses: {{ event.attending_count }} attending · {{ event.not_attending_count }} not attending</div>
+    {% else %}
+      <form method="post" class="d-flex flex-wrap align-items-center gap-2 mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="school" value="{{ membership.school_id }}">
+        <input type="hidden" name="action" value="rsvp">
+        <input type="hidden" name="event_id" value="{{ event.pk }}">
+        <label class="small fw-semibold" for="rsvp-{{ event.pk }}">Your response</label>
+        <select class="form-select form-select-sm" id="rsvp-{{ event.pk }}" name="response" style="max-width: 190px" required>
+          <option value="">Choose response</option>
+          <option value="attending" {% if event.my_rsvp == "attending" %}selected{% endif %}>I will attend</option>
+          <option value="not_attending" {% if event.my_rsvp == "not_attending" %}selected{% endif %}>I cannot attend</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary" type="submit">Save response</button>
+      </form>
+    {% endif %}
   </article>
   {% empty %}
   <div class="text-center py-5"><h3 class="h5">No upcoming events listed</h3><p class="text-secondary mb-0">When your school publishes an event for your audience, it will appear here.</p></div>
