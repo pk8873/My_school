@@ -403,8 +403,12 @@ def school_events(request):
     if role not in STAFF_ROLES and role not in {Membership.Role.PARENT, Membership.Role.STUDENT}:
         raise PermissionDenied("Your role cannot access school events.")
 
-    allowed_audiences = ["everyone", "parents"] if role == Membership.Role.PARENT else (
-        ["everyone", "students"] if role == Membership.Role.STUDENT else ["everyone", "staff"]
+    allowed_audiences = (
+        [choice[0] for choice in SchoolEvent.Audience.choices]
+        if management else
+        ["everyone", "parents"] if role == Membership.Role.PARENT else
+        ["everyone", "students"] if role == Membership.Role.STUDENT else
+        ["everyone", "staff"]
     )
     if request.method == "POST":
         action = request.POST.get("action", "create").strip()
