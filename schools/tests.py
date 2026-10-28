@@ -264,6 +264,43 @@ class TenantBoundaryTests(TestCase):
         self.assertFalse(Student.objects.filter(school=self.a, admission_number="A-002").exists())
 
 
+
+    def test_staff_can_download_school_scoped_student_report_card_pdf(self):
+        from .models import Exam, ExamResult
+        exam = Exam.objects.create(school=self.a, title="Synthetic Term Exam", classroom=self.ca, exam_date="2026-10-01", max_marks=100)
+        ExamResult.objects.create(school=self.a, exam=exam, student=self.sa, marks_obtained=87)
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/students/{self.sa.pk}/report-card.pdf?school={self.a.pk}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(b"%PDF", response.content[:10])
+        self.assertNotIn(b"Synthetic Beta", response.content)
+
+    def test_parent_cannot_download_report_card_without_permission(self):
+        parent = User.objects.create_user(username="synthetic_no_report_parent", password="synthetic-test-pass-123")
+        Membership.objects.create(user=parent, school=self.a, role=Membership.Role.PARENT)
+        ParentStudentLink.objects.create(parent=parent, student=self.sa, can_view_results=False)
+        self.client.force_login(parent)
+        response = self.client.get(f"/students/{self.sa.pk}/report-card.pdf?school={self.a.pk}")
+        self.assertEqual(response.status_code, 403)
+
+    def test_parent_can_download_fee_statement_only_for_linked_child_with_permission(self):
+        parent = User.objects.create_user(username="synthetic_fee_parent", password="synthetic-test-pass-123")
+        Membership.objects.create(user=parent, school=self.a, role=Membership.Role.PARENT)
+        ParentStudentLink.objects.create(parent=parent, student=self.sa, can_view_fees=True)
+        FeeRecord.objects.create(school=self.a, student=self.sa, title="Synthetic Term Fee", amount="1000.00", paid_amount="300.00")
+        self.client.force_login(parent)
+        response = self.client.get(f"/students/{self.sa.pk}/fee-statement.pdf?school={self.a.pk}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(b"%PDF", response.content[:10])
+
+    def test_fee_statement_pdf_cannot_cross_school_boundary(self):
+        self.client.force_login(self.user_a)
+        response = self.client.get(f"/students/{self.sb.pk}/fee-statement.pdf?school={self.a.pk}")
+        self.assertEqual(response.status_code, 404)
+
+
     def test_platform_admin_can_update_subscription_plan_metadata(self):
         from .models import SchoolSubscription
         SchoolSubscription.objects.create(school=self.a, plan="starter", status="trial", student_limit=20)
