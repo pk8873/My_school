@@ -30,6 +30,7 @@
     {% if event.description %}<div class="mb-3">{{ event.description|linebreaksbr }}</div>{% endif %}
     {% if can_manage %}
       <div class="small text-secondary mb-2">Responses: {{ event.attending_count }} attending · {{ event.not_attending_count }} not attending</div>
+      <div class="mb-3"><a class="btn btn-sm btn-outline-secondary" href="{% url 'school_event_rsvp_csv' event.id %}">Download RSVP list (CSV)</a></div>
     {% else %}
       <form method="post" class="d-flex flex-wrap align-items-center gap-2 mt-3">
         {% csrf_token %}
