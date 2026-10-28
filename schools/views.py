@@ -471,9 +471,26 @@ def school_events(request):
             messages.success(request, "School event published.")
             return redirect(f"{request.path}?school={membership.school_id}")
 
-    events = SchoolEvent.objects.filter(
+    search_query = request.GET.get("q", "").strip()[:100]
+    date_filter = request.GET.get("when", "upcoming").strip()
+    if date_filter not in {"upcoming", "past", "all"}:
+        date_filter = "upcoming"
+    events_queryset = SchoolEvent.objects.filter(
         school=membership.school, is_published=True, audience__in=allowed_audiences
-    ).order_by("starts_at", "pk")[:200]
+    )
+    if search_query:
+        events_queryset = events_queryset.filter(
+            Q(title__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(location__icontains=search_query)
+        )
+    now = timezone.now()
+    if date_filter == "upcoming":
+        events_queryset = events_queryset.filter(starts_at__gte=now)
+    elif date_filter == "past":
+        events_queryset = events_queryset.filter(starts_at__lt=now)
+    total_matching_events = events_queryset.count()
+    events = list(events_queryset.order_by("starts_at", "pk")[:200])
     rsvp_map = dict(SchoolEventRSVP.objects.filter(
         event__in=events, user=request.user
     ).values_list("event_id", "response"))
@@ -486,6 +503,9 @@ def school_events(request):
     return render(request, "schools/school_events.html", {
         "membership": membership, "events": events, "can_manage": management,
         "audience_choices": SchoolEvent.Audience.choices, "rsvp_map": rsvp_map,
+        "search_query": search_query, "date_filter": date_filter,
+        "total_matching_events": total_matching_events,
+        "showing_event_count": len(events),
     })
 
 
