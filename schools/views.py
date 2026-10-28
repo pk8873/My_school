@@ -163,6 +163,7 @@ def attendance_bulk(request):
         if not students.exists():
             messages.error(request, "There are no active students in this class.")
         elif invalid:
+            form.add_error(None, "Choose a valid attendance status for every student.")
             messages.error(request, "Choose a valid attendance status for every student.")
         else:
             with transaction.atomic():
@@ -181,9 +182,9 @@ def attendance_bulk(request):
         students = Student.objects.filter(
             school=membership.school, classroom=classroom, is_active=True
         ).order_by("first_name", "last_name")
-    else:
+    elif request.method == "GET":
         form = BulkAttendanceSelectionForm(
-            school=membership.school,
+            request.GET or None, school=membership.school,
             initial={"date": selected_date, "classroom": request.GET.get("classroom") or None},
         )
 
@@ -194,8 +195,9 @@ def attendance_bulk(request):
                 school=membership.school, student__in=students, date=selected_date
             )
         }
+    student_rows = [{"student": student, "record": existing.get(student.pk)} for student in students]
     return render(request, "schools/attendance_bulk.html", {
-        "membership": membership, "form": form, "students": students,
+        "membership": membership, "form": form, "students": students, "student_rows": student_rows,
         "existing": existing, "selected_date": selected_date,
         "status_choices": AttendanceRecord.Status.choices,
     })
