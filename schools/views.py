@@ -512,7 +512,28 @@ def export_csv(request, report):
     from django.http import HttpResponse
 
     membership = get_membership(request)
-    if report == "students":
+    if report == "staff-directory":
+        require_roles(membership, MANAGEMENT_ROLES)
+        rows = Membership.objects.filter(school=membership.school).select_related("user").order_by("role", "user__username")
+        role_filter = request.GET.get("role", "").strip()
+        valid_roles = {value for value, _label in Membership.Role.choices}
+        if role_filter:
+            if role_filter not in valid_roles:
+                return HttpResponse("Invalid role filter.", status=400)
+            rows = rows.filter(role=role_filter)
+        status_filter = request.GET.get("status", "").strip()
+        if status_filter:
+            if status_filter not in {"active", "inactive"}:
+                return HttpResponse("Invalid status filter.", status=400)
+            rows = rows.filter(is_active=(status_filter == "active"))
+        filename = "school-account-directory.csv"
+        headers = ["Username", "First name", "Last name", "Full name", "Email", "School role", "Membership status", "Membership created"]
+        values = ((
+            row.user.get_username(), row.user.first_name, row.user.last_name,
+            row.user.get_full_name(), row.user.email, row.get_role_display(),
+            "Active" if row.is_active else "Inactive", row.created_at,
+        ) for row in rows)
+    elif report == "students":
         require_roles(membership, MANAGEMENT_ROLES)
         rows = Student.objects.filter(school=membership.school).select_related("classroom")
         filename = "students.csv"
