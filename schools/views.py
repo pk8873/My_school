@@ -6,10 +6,11 @@ from django.db.models import F, Q, Sum
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from datetime import datetime
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
-from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory, TransferCertificate, Announcement, AnnouncementRead
+from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance, StudentClassHistory, TransferCertificate, Announcement, AnnouncementRead, SchoolEvent
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -390,6 +391,70 @@ def announcement_inbox(request):
         "unread_count": sum(1 for item in items if not item["is_read"]),
     })
 
+
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def school_events(request):
+    membership = get_membership(request)
+    role = membership.role
+    management = role in MANAGEMENT_ROLES
+    if role not in STAFF_ROLES and role not in {Membership.Role.PARENT, Membership.Role.STUDENT}:
+        raise PermissionDenied("Your role cannot access school events.")
+
+    allowed_audiences = ["everyone", "parents"] if role == Membership.Role.PARENT else (
+        ["everyone", "students"] if role == Membership.Role.STUDENT else ["everyone", "staff"]
+    )
+    if request.method == "POST":
+        if not management:
+            raise PermissionDenied("Only school admins and principals can create events.")
+        title = request.POST.get("title", "").strip()
+        description = request.POST.get("description", "").strip()
+        starts_raw = request.POST.get("starts_at", "").strip()
+        ends_raw = request.POST.get("ends_at", "").strip()
+        location = request.POST.get("location", "").strip()
+        audience = request.POST.get("audience", SchoolEvent.Audience.EVERYONE)
+        errors = []
+        starts_at = ends_at = None
+        try:
+            starts_at = datetime.fromisoformat(starts_raw)
+            if timezone.is_naive(starts_at):
+                starts_at = timezone.make_aware(starts_at, timezone.get_current_timezone())
+        except (ValueError, TypeError):
+            errors.append("Enter a valid event start date and time.")
+        if ends_raw:
+            try:
+                ends_at = datetime.fromisoformat(ends_raw)
+                if timezone.is_naive(ends_at):
+                    ends_at = timezone.make_aware(ends_at, timezone.get_current_timezone())
+            except (ValueError, TypeError):
+                errors.append("Enter a valid event end date and time.")
+        if not title or len(title) > 160:
+            errors.append("Event title is required and must be 160 characters or fewer.")
+        if audience not in SchoolEvent.Audience.values:
+            errors.append("Choose a valid audience.")
+        if starts_at and ends_at and ends_at < starts_at:
+            errors.append("Event end must be after its start.")
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            SchoolEvent.objects.create(
+                school=membership.school, title=title, description=description,
+                starts_at=starts_at, ends_at=ends_at, location=location,
+                audience=audience, is_published=True, created_by=request.user,
+            )
+            messages.success(request, "School event published.")
+            return redirect(f"{request.path}?school={membership.school_id}")
+
+    events = SchoolEvent.objects.filter(
+        school=membership.school, is_published=True, audience__in=allowed_audiences
+    ).order_by("starts_at", "pk")[:200]
+    return render(request, "schools/school_events.html", {
+        "membership": membership, "events": events, "can_manage": management,
+        "audience_choices": SchoolEvent.Audience.choices,
+    })
 
 
 @login_required
