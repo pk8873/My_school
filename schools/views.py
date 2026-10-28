@@ -1377,9 +1377,6 @@ def import_students_csv(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-
-@login_required
-@require_http_methods(["GET", "POST"])
 def staff_attendance(request):
     """School-scoped staff attendance; only admins/principals may mark records."""
     from datetime import date
@@ -1462,6 +1459,8 @@ def staff_attendance(request):
         "monthly_counts": monthly_counts, "month_start": month_start,
     })
 
+@login_required
+@require_http_methods(["GET", "POST"])
 def staff_leave(request):
     """Staff leave self-service; only school management can review requests."""
     from datetime import date
