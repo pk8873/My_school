@@ -99,3 +99,13 @@ class HomeworkSubmissionAdmin(admin.ModelAdmin):
     list_filter = ("school", "status", "submitted_at")
     search_fields = ("homework__title", "student__first_name", "student__last_name", "student__admission_number")
     readonly_fields = ("submitted_at", "created_at", "graded_at")
+
+
+from .models import AttendanceChangeLog
+
+@admin.register(AttendanceChangeLog)
+class AttendanceChangeLogAdmin(admin.ModelAdmin):
+    list_display = ("student_name", "admission_number", "school", "attendance_date", "old_status", "new_status", "changed_by", "changed_at")
+    list_filter = ("school", "attendance_date", "old_status", "new_status")
+    search_fields = ("student_name", "admission_number", "changed_by__username")
+    readonly_fields = ("school", "attendance", "student_name", "admission_number", "attendance_date", "old_status", "new_status", "old_note", "new_note", "changed_by", "changed_at")
