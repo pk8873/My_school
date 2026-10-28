@@ -729,6 +729,37 @@ def export_csv(request, report):
             row.submitted_at, row.get_status_display(), row.submission_text,
             row.teacher_feedback, row.graded_by.get_username() if row.graded_by else "", row.graded_at or "",
         ) for row in rows)
+    elif report == "overdue-fees":
+        from django.utils.dateparse import parse_date
+
+        require_roles(membership, FEE_ROLES)
+        rows = FeeRecord.objects.filter(
+            school=membership.school,
+            student__school=membership.school,
+            due_date__lt=timezone.localdate(),
+            paid_amount__lt=F("amount"),
+            status__in=[FeeRecord.Status.PENDING, FeeRecord.Status.PARTIAL],
+        ).select_related("student", "student__classroom").order_by("due_date", "student__first_name")
+        classroom_id = request.GET.get("classroom", "").strip()
+        if classroom_id:
+            if not classroom_id.isdigit():
+                return HttpResponse("Invalid classroom filter.", status=400)
+            rows = rows.filter(student__classroom_id=int(classroom_id), student__classroom__school=membership.school)
+        due_before_raw = request.GET.get("due_before", "").strip()
+        if due_before_raw:
+            due_before = parse_date(due_before_raw)
+            if due_before is None:
+                return HttpResponse("Invalid due_before date. Use YYYY-MM-DD.", status=400)
+            rows = rows.filter(due_date__lt=due_before)
+        filename = "overdue-fees.csv"
+        headers = ["Admission number", "Student", "Class", "Section", "Fee head", "Amount", "Paid", "Outstanding balance", "Due date", "Days overdue", "Payment status", "Reference"]
+        today = timezone.localdate()
+        values = ((
+            row.student.admission_number, str(row.student), row.student.classroom.name,
+            row.student.classroom.section, row.title, row.amount, row.paid_amount,
+            row.balance, row.due_date or "", (today - row.due_date).days if row.due_date else "",
+            row.get_status_display(), row.payment_reference,
+        ) for row in rows)
     elif report == "fees":
         require_roles(membership, FEE_ROLES)
         rows = FeeRecord.objects.filter(school=membership.school).select_related("student")
