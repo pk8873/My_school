@@ -234,6 +234,47 @@ class Homework(models.Model):
         return self.title
 
 
+class HomeworkSubmission(models.Model):
+    class Status(models.TextChoices):
+        SUBMITTED = "submitted", "Submitted"
+        REVIEWED = "reviewed", "Reviewed"
+        NEEDS_WORK = "needs_work", "Needs improvement"
+
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="homework_submissions")
+    homework = models.ForeignKey(Homework, on_delete=models.CASCADE, related_name="submissions")
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="homework_submissions")
+    submission_text = models.TextField()
+    submitted_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.SUBMITTED)
+    teacher_feedback = models.TextField(blank=True)
+    graded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="graded_homework_submissions")
+    graded_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["homework", "student"], name="unique_homework_submission_per_student"),
+        ]
+        indexes = [
+            models.Index(fields=["school", "status"], name="schools_hwsub_school_status_idx"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.homework_id and self.school_id and self.homework.school_id != self.school_id:
+            errors["homework"] = "Homework must belong to the same school."
+        if self.student_id and self.school_id and self.student.school_id != self.school_id:
+            errors["student"] = "Student must belong to the same school."
+        if self.homework_id and self.student_id and self.homework.classroom_id and self.student.classroom_id != self.homework.classroom_id:
+            errors["student"] = "Student must belong to the homework classroom."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.homework.title} · {self.student}"
+
+
 class Announcement(models.Model):
     class Audience(models.TextChoices):
         EVERYONE = "everyone", "Everyone"
