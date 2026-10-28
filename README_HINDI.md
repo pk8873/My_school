@@ -9,6 +9,7 @@
 - School admin/principal के लिए class creation और student admission/search.
 - School admin/principal/teacher के लिए daily attendance entry, date-wise register और class-wise bulk attendance marking; bulk save उसी class/date के मौजूदा records को update करता है. Bulk attendance creation/correction changes are recorded in a school-scoped audit history with old/new status and notes.
 - School admin/principal/accountant के लिए fee ledger, manual fee collection record, partial payment balance, student/admission number/fee-head search, payment-status filter और unpaid balance वाले past-due records का overdue filter (school-scoped).
+- Individual manual fee payment history: payment date, amount, method, reference, note और recorded-by; each payment updates the outstanding balance inside a database transaction and cannot exceed the remaining balance. This is a manual ledger, not a payment gateway; older paid amounts entered directly into the fee ledger do not automatically become individual payment rows.
 - Exams, maximum marks, student results, percentage calculation and school/class-scoped exam selection.
 - Weekly class timetable with subjects, teacher assignment, rooms, weekday grouping and time validation. School admins/principals manage the schedule; teachers see only assigned slots; students see their linked class; parents see linked children’s classes.
 - Tenant-scoped CSV exports for student registers, attendance (date-filterable) and fee ledger, protected by role checks.
@@ -32,7 +33,7 @@
 - Payroll, staff attendance and staff self-service. Basic school-scoped account creation and staff/family directory are implemented.
 - Bulk marks entry, homework file/photo uploads, push notifications and homework revision history. Text-based homework submission and teacher feedback are implemented.
 - Attendance history audit trail bulk attendance updates के लिए शामिल है; attendance PDF exports और advanced report filters अभी बाकी हैं.
-- Fee receipts/PDF, discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks.
+- Fee discounts, concessions, refunds, payment reconciliation and verified online payment gateway/webhooks. Manual fee acknowledgement PDF and individual manual payment history are implemented; gateway verification is not.
 - Full CRUD edit/delete flows, password reset/email delivery, audit logs, backups/restore and monitoring.
 - Dedicated school-scoped Django admin permissions, deployment review, accessibility review and end-to-end production tests.
 
