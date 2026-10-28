@@ -34,6 +34,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="homeworksubmission",
-            index=models.Index(fields=["school", "status"], name="schools_hwsub_school_status_idx"),
+            index=models.Index(fields=["school", "status"], name="hwsub_school_status_idx"),
         ),
     ]
