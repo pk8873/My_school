@@ -20,6 +20,7 @@ urlpatterns = [
     path("attendance/bulk/", views.attendance_bulk, name="attendance_bulk"),
     path("attendance/history/", views.attendance_history, name="attendance_history"),
     path("fees/", views.fees, name="fees"),
+    path("my-fees/", views.my_fee_history, name="my_fee_history"),
     path("fees/<int:fee_id>/payments/", views.fee_payment_history, name="fee_payment_history"),
     path("fees/payments/<int:payment_id>/receipt.pdf", fee_payment_receipt_pdf, name="fee_payment_receipt_pdf"),
     path("fees/<int:fee_id>/receipt.pdf", views.fee_collection_receipt_pdf, name="fee_collection_receipt_pdf"),
