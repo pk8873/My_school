@@ -72,3 +72,60 @@ class TransferCertificateRegisterTests(TestCase):
         self.client.force_login(self.teacher)
         response = self.client.get(f"/students/transfer-certificates/?school={self.school.pk}")
         self.assertEqual(response.status_code, 403)
+
+
+class TransferCertificateRegisterCsvTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="CSV Register School", slug="csv-register-school")
+        self.other_school = School.objects.create(name="Private CSV School", slug="private-csv-school")
+        self.admin = User.objects.create_user(username="tc_csv_admin", password="synthetic-test-pass-123")
+        self.teacher = User.objects.create_user(username="tc_csv_teacher", password="synthetic-test-pass-123")
+        Membership.objects.create(user=self.admin, school=self.school, role=Membership.Role.SCHOOL_ADMIN)
+        Membership.objects.create(user=self.teacher, school=self.school, role=Membership.Role.TEACHER)
+        self.classroom = ClassRoom.objects.create(school=self.school, name="Class 5", section="A", academic_year="2026-2027")
+        self.other_classroom = ClassRoom.objects.create(school=self.other_school, name="Class 5", section="A", academic_year="2026-2027")
+        self.student = Student.objects.create(
+            school=self.school, classroom=self.classroom, admission_number="CSV-TC-001",
+            first_name="Asha", last_name="Verma",
+        )
+        self.foreign_student = Student.objects.create(
+            school=self.other_school, classroom=self.other_classroom, admission_number="PRIVATE-CSV-001",
+            first_name="Private", last_name="Person",
+        )
+        TransferCertificate.objects.create(
+            school=self.school, student=self.student, certificate_number="TC-2026-CSV001",
+            issue_date=date(2026, 10, 1), reason="=HYPERLINK(\"https://bad.example\")",
+        )
+        TransferCertificate.objects.create(
+            school=self.other_school, student=self.foreign_student, certificate_number="TC-PRIVATE-001",
+            issue_date=date(2026, 10, 2),
+        )
+        self.cancelled = TransferCertificate.objects.create(
+            school=self.school, student=self.student, certificate_number="TC-2026-CANCELLED",
+            issue_date=date(2026, 10, 3), status=TransferCertificate.Status.CANCELLED,
+        )
+
+    def test_csv_is_school_scoped_and_formula_safe(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/students/transfer-certificates.csv?school={self.school.pk}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response["Content-Type"])
+        self.assertIn("private, no-store", response["Cache-Control"])
+        self.assertIn("TC-2026-CSV001", response.content.decode("utf-8-sig"))
+        self.assertNotIn("PRIVATE-CSV-001", response.content.decode("utf-8-sig"))
+        self.assertIn("'=HYPERLINK", response.content.decode("utf-8-sig"))
+
+    def test_status_filter_and_invalid_filter(self):
+        self.client.force_login(self.admin)
+        issued = self.client.get(f"/students/transfer-certificates.csv?school={self.school.pk}&status=issued")
+        cancelled = self.client.get(f"/students/transfer-certificates.csv?school={self.school.pk}&status=cancelled")
+        invalid = self.client.get(f"/students/transfer-certificates.csv?school={self.school.pk}&status=unknown")
+        self.assertIn("TC-2026-CSV001", issued.content.decode("utf-8-sig"))
+        self.assertNotIn("TC-2026-CANCELLED", issued.content.decode("utf-8-sig"))
+        self.assertIn("TC-2026-CANCELLED", cancelled.content.decode("utf-8-sig"))
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_teacher_cannot_export_register(self):
+        self.client.force_login(self.teacher)
+        response = self.client.get(f"/students/transfer-certificates.csv?school={self.school.pk}")
+        self.assertEqual(response.status_code, 403)
