@@ -788,6 +788,54 @@ def _build_pdf(title, subtitle, rows, *, filename):
 
 @login_required
 @require_GET
+def attendance_report_pdf(request):
+    """Download a school-scoped attendance PDF report for a date range and optional class."""
+    from django.utils.dateparse import parse_date
+
+    membership = get_membership(request)
+    require_roles(membership, ACADEMIC_ROLES)
+    rows = AttendanceRecord.objects.filter(
+        school=membership.school,
+        student__school=membership.school,
+    ).select_related("student", "student__classroom").order_by("date", "student__classroom__name", "student__first_name")
+    parsed_dates = {}
+    for parameter, lookup in (("date_from", "date__gte"), ("date_to", "date__lte")):
+        raw = request.GET.get(parameter, "").strip()
+        if raw:
+            parsed = parse_date(raw)
+            if parsed is None:
+                return HttpResponse("Invalid date filter. Use YYYY-MM-DD.", status=400)
+            parsed_dates[parameter] = parsed
+            rows = rows.filter(**{lookup: parsed})
+    if parsed_dates.get("date_from") and parsed_dates.get("date_to") and parsed_dates["date_from"] > parsed_dates["date_to"]:
+        return HttpResponse("date_from must be on or before date_to.", status=400)
+    classroom_id = request.GET.get("classroom", "").strip()
+    if classroom_id:
+        if not classroom_id.isdigit():
+            return HttpResponse("Invalid classroom filter.", status=400)
+        rows = rows.filter(student__classroom_id=int(classroom_id), student__classroom__school=membership.school)
+    table_rows = [["Date", "Admission no.", "Student", "Class", "Status", "Note"]]
+    for record in rows[:2000]:
+        table_rows.append([
+            record.date.isoformat(), record.student.admission_number, str(record.student),
+            f"{record.student.classroom.name} {record.student.classroom.section}".strip(),
+            record.get_status_display(), record.note or "—",
+        ])
+    start = parsed_dates.get("date_from")
+    end = parsed_dates.get("date_to")
+    period = f"{start or 'All dates'} to {end or 'Today'}"
+    if not start and not end:
+        period = "All recorded dates"
+    if classroom_id and rows.exists():
+        period += f" · {rows.first().student.classroom.name}"
+    return _build_pdf(
+        "Attendance Report", f"{membership.school.name} · {period} · Up to 2,000 records",
+        table_rows, filename="attendance-report.pdf",
+    )
+
+
+@login_required
+@require_GET
 def student_report_card_pdf(request, student_id):
     """Download a school-scoped report card after record-level authorization."""
     membership = get_membership(request)
