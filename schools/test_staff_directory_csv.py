@@ -17,8 +17,10 @@ class StaffDirectoryCsvTests(TestCase):
             first_name="Asha", last_name="Sharma", email="asha@example.test",
         )
         self.private_user = User.objects.create_user(username="private_directory_user", password="synthetic-test-pass-123")
+        self.inactive_teacher = User.objects.create_user(username="directory_inactive_teacher", password="synthetic-test-pass-123")
         Membership.objects.create(user=self.admin, school=self.school, role=Membership.Role.SCHOOL_ADMIN)
-        Membership.objects.create(user=self.teacher, school=self.school, role=Membership.Role.TEACHER, is_active=False)
+        Membership.objects.create(user=self.teacher, school=self.school, role=Membership.Role.TEACHER)
+        Membership.objects.create(user=self.inactive_teacher, school=self.school, role=Membership.Role.TEACHER, is_active=False)
         Membership.objects.create(user=self.private_user, school=self.other_school, role=Membership.Role.PARENT)
 
     def test_management_can_export_only_current_school_accounts(self):
@@ -40,7 +42,8 @@ class StaffDirectoryCsvTests(TestCase):
         invalid = self.client.get(f"/reports/staff-directory.csv?school={self.school.pk}&status=maybe")
         body = filtered.content.decode("utf-8-sig")
         self.assertEqual(filtered.status_code, 200)
-        self.assertIn("directory_teacher", body)
+        self.assertIn("directory_inactive_teacher", body)
+        self.assertNotIn("directory_teacher", body)
         self.assertNotIn("directory_admin", body)
         self.assertEqual(invalid.status_code, 400)
 
