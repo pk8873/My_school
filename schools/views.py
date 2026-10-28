@@ -162,8 +162,8 @@ def academics(request):
     if role not in ACADEMIC_ROLES and role not in {Membership.Role.PARENT, Membership.Role.STUDENT}:
         raise PermissionDenied("Your role cannot access academic records.")
 
-    from .forms import AnnouncementForm, ExamForm, ExamResultForm, HomeworkForm
-    from .models import Announcement, Exam, ExamResult, Homework
+    from .forms import AnnouncementForm, ExamForm, ExamResultForm, HomeworkForm, HomeworkSubmissionForm, HomeworkFeedbackForm
+    from .models import Announcement, Exam, ExamResult, Homework, HomeworkSubmission
 
     exam_form = ExamForm(request.POST or None, school=membership.school, prefix="exam") if can_manage else None
     result_form = ExamResultForm(request.POST or None, school=membership.school, prefix="result") if can_manage else None
@@ -215,11 +215,103 @@ def academics(request):
         homework_rows = Homework.objects.filter(school=membership.school).select_related("classroom")[:100]
         announcements = Announcement.objects.filter(school=membership.school)[:100]
     exams = Exam.objects.filter(school=membership.school).select_related("classroom")[:100]
+    if role == Membership.Role.STUDENT:
+        my_submissions = HomeworkSubmission.objects.filter(
+            school=membership.school, student__portal_user=request.user
+        ).select_related("homework")
+    elif role == Membership.Role.PARENT:
+        my_submissions = HomeworkSubmission.objects.filter(
+            school=membership.school, student__parent_links__parent=request.user,
+            student__parent_links__is_active=True
+        ).select_related("homework", "student").distinct()
+    else:
+        my_submissions = HomeworkSubmission.objects.none()
+    review_rows = []
+    if can_manage:
+        for submission in HomeworkSubmission.objects.filter(
+            school=membership.school
+        ).select_related("homework", "student", "student__classroom")[:100]:
+            review_rows.append({"submission": submission, "form": HomeworkFeedbackForm(instance=submission)})
     return render(request, "schools/academics.html", {
         "membership": membership, "role": role, "can_manage": can_manage,
         "exam_form": exam_form, "result_form": result_form, "homework_form": homework_form,
         "announcement_form": announcement_form, "exams": exams, "results": results,
         "homework_items": homework_rows, "announcements": announcements,
+        "my_submissions": my_submissions, "review_rows": review_rows,
+    })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def homework_submit(request, homework_id):
+    """A student may submit only for their linked profile and assigned school/class."""
+    membership = get_membership(request)
+    if membership.role != Membership.Role.STUDENT:
+        raise PermissionDenied("Only student accounts can submit homework.")
+    from .forms import HomeworkSubmissionForm
+    from .models import Homework, HomeworkSubmission
+
+    student = Student.objects.filter(
+        school=membership.school, portal_user=request.user, is_active=True
+    ).select_related("classroom").first()
+    if student is None:
+        raise PermissionDenied("Your student account is not linked to an active student profile.")
+    homework = Homework.objects.filter(
+        pk=homework_id, school=membership.school, is_published=True
+    ).filter(Q(classroom__isnull=True) | Q(classroom=student.classroom)).first()
+    if homework is None:
+        raise Http404("Homework not found for this student.")
+    submission = HomeworkSubmission.objects.filter(
+        school=membership.school, homework=homework, student=student
+    ).first()
+    if request.method == "POST":
+        form = HomeworkSubmissionForm(request.POST, instance=submission)
+        if form.is_valid():
+            obj = form.save(commit=False)
+            obj.school = membership.school
+            obj.homework = homework
+            obj.student = student
+            obj.status = HomeworkSubmission.Status.SUBMITTED
+            obj.teacher_feedback = ""
+            obj.graded_by = None
+            obj.graded_at = None
+            obj.full_clean()
+            obj.save()
+            messages.success(request, "Homework submitted. Your teacher can now review it.")
+            return redirect(f"/academics/?school={membership.school_id}")
+    else:
+        form = HomeworkSubmissionForm(instance=submission)
+    return render(request, "schools/homework_submit.html", {
+        "membership": membership, "homework": homework, "form": form,
+        "submission": submission,
+    })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def homework_review(request, submission_id):
+    """School academic staff may review only submissions belonging to their school."""
+    membership = get_membership(request)
+    require_roles(membership, ACADEMIC_ROLES)
+    from .forms import HomeworkFeedbackForm
+    from .models import HomeworkSubmission
+
+    submission = HomeworkSubmission.objects.filter(
+        pk=submission_id, school=membership.school
+    ).select_related("homework", "student", "student__classroom").first()
+    if submission is None:
+        raise Http404("Submission not found.")
+    form = HomeworkFeedbackForm(request.POST or None, instance=submission)
+    if request.method == "POST" and form.is_valid():
+        obj = form.save(commit=False)
+        obj.graded_by = request.user
+        obj.graded_at = timezone.now()
+        obj.full_clean()
+        obj.save()
+        messages.success(request, "Homework feedback saved.")
+        return redirect(f"/academics/?school={membership.school_id}")
+    return render(request, "schools/homework_review.html", {
+        "membership": membership, "submission": submission, "form": form,
     })
 
 
