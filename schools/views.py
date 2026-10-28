@@ -1,14 +1,15 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import F, Q, Sum
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
-from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
-from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, Membership, Student, School, SchoolSubscription, ParentStudentLink
+from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
+from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -663,6 +664,58 @@ def student_fee_statement_pdf(request, student_id):
     table_rows.append(["TOTAL", "—", f"INR {total_amount:.2f}", f"INR {total_paid:.2f}", f"INR {total_balance:.2f}", ""])
     subtitle = f"School: {membership.school.name} | Student: {student.first_name} {student.last_name} | Admission: {student.admission_number} | Generated: {timezone.localdate().isoformat()} | Statement only — not proof of payment"
     return _build_pdf("Student Fee Statement", subtitle, table_rows, filename=f"fee-statement-{student.admission_number}.pdf")
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def fee_payment_history(request, fee_id):
+    """View an individual fee's manual payment history and record a new collection."""
+    membership = get_membership(request)
+    require_roles(membership, FEE_ROLES)
+    fee = FeeRecord.objects.filter(
+        pk=fee_id, school=membership.school
+    ).select_related("student", "student__classroom").first()
+    if fee is None:
+        raise Http404("Fee record not found.")
+
+    form = FeePaymentForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            locked_fee = FeeRecord.objects.select_for_update().filter(
+                pk=fee_id, school=membership.school
+            ).first()
+            if locked_fee is None:
+                raise Http404("Fee record not found.")
+            amount = form.cleaned_data["amount"]
+            if locked_fee.status == FeeRecord.Status.WAIVED:
+                form.add_error(None, "A waived fee cannot accept a payment.")
+            elif amount > locked_fee.balance:
+                form.add_error("amount", f"Payment cannot exceed the outstanding balance of {locked_fee.balance:.2f}.")
+            else:
+                payment = form.save(commit=False)
+                payment.school = membership.school
+                payment.fee_record = locked_fee
+                payment.recorded_by = request.user
+                payment.full_clean()
+                payment.save()
+                locked_fee.paid_amount += payment.amount
+                locked_fee.status = (
+                    FeeRecord.Status.PAID
+                    if locked_fee.paid_amount >= locked_fee.amount
+                    else FeeRecord.Status.PARTIAL
+                )
+                locked_fee.full_clean()
+                locked_fee.save(update_fields=["paid_amount", "status"])
+                messages.success(request, "Manual payment recorded. No bank or online payment was processed by this app.")
+                return redirect(f"{request.path}?school={membership.school_id}")
+
+    payments = FeePayment.objects.filter(
+        school=membership.school, fee_record=fee
+    ).select_related("recorded_by")
+    return render(request, "schools/fee_payment_history.html", {
+        "membership": membership, "fee": fee, "form": form,
+        "payments": payments, "recorded_payment_total": payments.aggregate(total=Sum("amount"))["total"] or 0,
+    })
+
 
 
 @login_required
