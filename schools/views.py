@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .forms import AttendanceRecordForm, ClassRoomForm, FeeRecordForm, FeePaymentForm, StudentForm, SchoolOnboardingForm, StaffAccountForm, ParentStudentLinkForm, StudentAccountLinkForm, SubscriptionUpdateForm
-from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest
+from .models import AttendanceRecord, AttendanceChangeLog, ClassRoom, FeeRecord, FeePayment, Membership, Student, School, SchoolSubscription, ParentStudentLink, StaffLeaveRequest, StaffAttendance
 from .tenant import active_memberships
 
 STAFF_ROLES = {Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT}
@@ -1377,6 +1377,89 @@ def import_students_csv(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def staff_attendance(request):
+    """School-scoped staff attendance; only admins/principals may mark records."""
+    from datetime import date
+    from django.db import IntegrityError
+
+    membership = get_membership(request)
+    require_roles(membership, STAFF_ROLES)
+    is_manager = membership.role in MANAGEMENT_ROLES
+    raw_date = request.GET.get("date") or request.POST.get("date") or timezone.localdate().isoformat()
+    try:
+        selected_date = date.fromisoformat(raw_date)
+    except ValueError:
+        selected_date = timezone.localdate()
+        messages.error(request, "Enter a valid attendance date.")
+
+    staff_memberships = membership.school.memberships.filter(
+        is_active=True,
+        role__in=[Membership.Role.SCHOOL_ADMIN, Membership.Role.PRINCIPAL, Membership.Role.TEACHER, Membership.Role.ACCOUNTANT],
+    ).select_related("user").order_by("user__first_name", "user__last_name", "user__username")
+
+    if request.method == "POST":
+        if not is_manager:
+            raise PermissionDenied("Only school admins and principals can mark staff attendance.")
+        if request.POST.get("action") != "save_attendance":
+            raise Http404("Unknown staff attendance action.")
+        if len(staff_memberships) > 1000:
+            return HttpResponse("Too many staff accounts for one bulk attendance submission.", status=400)
+        try:
+            with transaction.atomic():
+                for staff_membership in staff_memberships:
+                    staff_user = staff_membership.user
+                    raw_status = request.POST.get(f"status_{staff_user.pk}", "").strip()
+                    if raw_status not in StaffAttendance.Status.values:
+                        continue
+                    note = request.POST.get(f"note_{staff_user.pk}", "").strip()[:250]
+                    record, created = StaffAttendance.objects.get_or_create(
+                        school=membership.school, staff=staff_user, date=selected_date,
+                        defaults={"status": raw_status, "note": note, "marked_by": request.user},
+                    )
+                    if not created:
+                        record.status = raw_status
+                        record.note = note
+                        record.marked_by = request.user
+                        record.full_clean()
+                        record.save(update_fields=["status", "note", "marked_by", "updated_at"])
+                    else:
+                        record.full_clean()
+                        record.save()
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        except IntegrityError:
+            messages.error(request, "Attendance changed concurrently. Reload the page and try again.")
+        else:
+            messages.success(request, f"Staff attendance saved for {selected_date.isoformat()}.")
+            return redirect(f"{request.path}?school={membership.school_id}&date={selected_date.isoformat()}")
+
+    records = StaffAttendance.objects.filter(school=membership.school, date=selected_date).select_related("staff", "marked_by")
+    if not is_manager:
+        records = records.filter(staff=request.user)
+    record_by_user = {record.staff_id: record for record in records}
+    roster = []
+    if is_manager:
+        for staff_membership in staff_memberships:
+            staff_user = staff_membership.user
+            roster.append({"user": staff_user, "record": record_by_user.get(staff_user.pk)})
+    else:
+        roster = [{"user": request.user, "record": record_by_user.get(request.user.pk)}]
+    month_start = selected_date.replace(day=1)
+    month_records = StaffAttendance.objects.filter(
+        school=membership.school, date__year=selected_date.year, date__month=selected_date.month,
+    )
+    if not is_manager:
+        month_records = month_records.filter(staff=request.user)
+    monthly_counts = {key: month_records.filter(status=key).count() for key, _ in StaffAttendance.Status.choices}
+    return render(request, "schools/staff_attendance.html", {
+        "membership": membership, "is_manager": is_manager, "selected_date": selected_date,
+        "roster": roster, "status_choices": StaffAttendance.Status.choices,
+        "monthly_counts": monthly_counts, "month_start": month_start,
+    })
+
 def staff_leave(request):
     """Staff leave self-service; only school management can review requests."""
     from datetime import date
