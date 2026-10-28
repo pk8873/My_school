@@ -27,5 +27,6 @@ urlpatterns = [
     path("reports/<str:report>.csv", views.export_csv, name="export_csv"),
     path("platform/", views.platform_admin, name="platform_admin"),
     path("staff/", views.staff_management, name="staff_management"),
+    path("staff/attendance/", views.staff_attendance, name="staff_attendance"),
     path("staff/leave/", views.staff_leave, name="staff_leave"),
 ]
