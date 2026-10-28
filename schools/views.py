@@ -639,6 +639,55 @@ def student_fee_statement_pdf(request, student_id):
 
 
 @login_required
+@require_GET
+def fee_collection_receipt_pdf(request, fee_id):
+    """Download a receipt-style acknowledgement for a manually recorded collection."""
+    membership = get_membership(request)
+    fee = FeeRecord.objects.filter(pk=fee_id, school=membership.school).select_related(
+        "student", "student__classroom", "recorded_by"
+    ).first()
+    if fee is None:
+        raise Http404("Fee record not found.")
+    if membership.role in FEE_ROLES:
+        allowed = True
+    elif membership.role == Membership.Role.PARENT:
+        allowed = ParentStudentLink.objects.filter(
+            parent=request.user, student=fee.student, is_active=True, can_view_fees=True
+        ).exists()
+    elif membership.role == Membership.Role.STUDENT:
+        allowed = fee.student.portal_user_id == request.user.pk
+    else:
+        allowed = False
+    if not allowed:
+        raise PermissionDenied("You cannot view this fee record.")
+    if fee.paid_amount <= 0:
+        raise Http404("No collection has been recorded for this fee entry.")
+    table_rows = [
+        ["Field", "Recorded details"],
+        ["Receipt reference", f"FEE-{fee.school_id}-{fee.pk}"],
+        ["Student", f"{fee.student.first_name} {fee.student.last_name}"],
+        ["Admission number", fee.student.admission_number],
+        ["Class", str(fee.student.classroom)],
+        ["Fee head", fee.title],
+        ["Total fee", f"INR {fee.amount:.2f}"],
+        ["Amount recorded as collected", f"INR {fee.paid_amount:.2f}"],
+        ["Outstanding balance", f"INR {fee.balance:.2f}"],
+        ["Status", fee.get_status_display()],
+        ["Payment reference", fee.payment_reference or "Not provided"],
+        ["Record created", timezone.localtime(fee.created_at).strftime("%d %b %Y, %H:%M")],
+        ["Recorded by", fee.recorded_by.get_username() if fee.recorded_by else "Unavailable"],
+    ]
+    subtitle = (
+        f"School: {membership.school.name} | This document acknowledges the amount manually recorded in the school ledger. "
+        "It does not verify a bank transaction or online payment."
+    )
+    return _build_pdf(
+        "Manual Fee Collection Acknowledgement", subtitle, table_rows,
+        filename=f"fee-acknowledgement-{fee.student.admission_number}-{fee.pk}.pdf",
+    )
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def platform_admin(request):
     if not request.user.is_superuser:
