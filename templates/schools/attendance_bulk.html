@@ -24,13 +24,13 @@
     {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
     <div class="table-responsive"><table class="table table-hover align-middle">
       <thead><tr><th>Admission No.</th><th>Student</th><th>Attendance status</th><th>Note (optional)</th></tr></thead>
-      <tbody>{% for student in students %}{% with record=existing|get_item:student.pk %}{% endwith %}
+      <tbody>{% for row in student_rows %}{% with student=row.student record=row.record %}
       <tr><td>{{ student.admission_number }}</td><td><strong>{{ student.first_name }} {{ student.last_name }}</strong></td>
       <td><select class="form-select" name="status_{{ student.pk }}" required>
-        {% for key,label in status_choices %}<option value="{{ key }}" {% if existing|get_item:student.pk and existing|get_item:student.pk.status == key %}selected{% elif not existing|get_item:student.pk and key == "present" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        {% for key,label in status_choices %}<option value="{{ key }}" {% if record and record.status == key %}selected{% elif not record and key == "present" %}selected{% endif %}>{{ label }}</option>{% endfor %}
       </select></td>
-      <td><input class="form-control" name="note_{{ student.pk }}" maxlength="250" value="{% if existing|get_item:student.pk %}{{ existing|get_item:student.pk.note }}{% endif %}" placeholder="Optional note"></td></tr>
-      {% endfor %}</tbody>
+      <td><input class="form-control" name="note_{{ student.pk }}" maxlength="250" value="{% if record %}{{ record.note }}{% endif %}" placeholder="Optional note"></td></tr>
+      {% endwith %}{% endfor %}</tbody>
     </table></div>
     <button class="btn btn-primary" type="submit">Save attendance for all students</button>
   </form>
