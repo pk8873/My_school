@@ -1237,7 +1237,7 @@ def student_transfer_certificate_draft(request):
                     "TRANSFER CERTIFICATE — DRAFT",
                     "Draft only. School management must verify records and approve before official issuance.",
                     rows,
-                    filename=f"transfer-certificate-draft-{student.admission_number}.pdf",
+                    filename="transfer-certificate-draft.pdf",
                 )
                 response["Cache-Control"] = "private, no-store"
                 return response
