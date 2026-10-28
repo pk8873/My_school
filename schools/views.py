@@ -490,6 +490,39 @@ def school_events(request):
 
 
 @login_required
+@require_GET
+def school_event_rsvp_csv(request, event_id):
+    import csv
+
+    membership = get_membership(request)
+    require_roles(membership, MANAGEMENT_ROLES)
+    event = SchoolEvent.objects.filter(pk=event_id, school=membership.school).first()
+    if event is None:
+        raise Http404("School event not found.")
+
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="school-event-{event.pk}-rsvps.csv"'
+    response.write("\\ufeff")
+    writer = csv.writer(response)
+    writer.writerow(["Event", "User name", "Username", "Email", "Response", "Last updated"])
+    rsvps = SchoolEventRSVP.objects.filter(event=event).select_related("user").order_by(
+        "response", "user__last_name", "user__first_name", "user__username"
+    )
+    for rsvp in rsvps:
+        user = rsvp.user
+        full_name = (f"{user.first_name} {user.last_name}").strip() or user.get_username()
+        writer.writerow([
+            safe_csv_cell(event.title),
+            safe_csv_cell(full_name),
+            safe_csv_cell(user.get_username()),
+            safe_csv_cell(user.email),
+            rsvp.get_response_display(),
+            timezone.localtime(rsvp.updated_at).strftime("%Y-%m-%d %H:%M:%S"),
+        ])
+    return response
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def academics(request):
     membership = get_membership(request)
