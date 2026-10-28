@@ -722,3 +722,46 @@ class ClassCapacityTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "capacity of Class 1 A")
         self.assertFalse(Student.objects.filter(school=self.school, admission_number="CAP-002").exists())
+
+
+class FeeLedgerValidationTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Fee Validation School", slug="fee-validation")
+        self.user = User.objects.create_user(username="fee_validation_admin", password="synthetic-test-pass-123")
+        Membership.objects.create(user=self.user, school=self.school, role=Membership.Role.SCHOOL_ADMIN)
+        self.classroom = ClassRoom.objects.create(school=self.school, name="Class 2", section="A", academic_year="2026-2027")
+        self.student = Student.objects.create(
+            school=self.school, classroom=self.classroom,
+            admission_number="FV-001", first_name="Synthetic",
+        )
+
+    def test_negative_paid_amount_is_rejected_by_model_validation(self):
+        fee = FeeRecord(
+            school=self.school, student=self.student, title="Tuition",
+            amount="1000.00", paid_amount="-1.00",
+        )
+        with self.assertRaises(ValidationError) as raised:
+            fee.full_clean()
+        self.assertIn("paid_amount", raised.exception.message_dict)
+
+    def test_paid_status_cannot_be_selected_without_full_payment(self):
+        self.client.force_login(self.user)
+        response = self.client.post("/fees/", {
+            "student": self.student.pk, "title": "Term 1", "amount": "1000.00",
+            "paid_amount": "0.00", "due_date": "2026-11-15", "status": "paid",
+            "payment_reference": "", "note": "",
+        })
+        self.assertRedirects(response, f"/fees/?school={self.school.pk}")
+        fee = FeeRecord.objects.get(school=self.school, student=self.student, title="Term 1")
+        self.assertEqual(fee.status, FeeRecord.Status.PENDING)
+
+    def test_partial_payment_is_normalized_to_partial_status(self):
+        self.client.force_login(self.user)
+        response = self.client.post("/fees/", {
+            "student": self.student.pk, "title": "Term 2", "amount": "1000.00",
+            "paid_amount": "250.00", "due_date": "2026-11-15", "status": "pending",
+            "payment_reference": "", "note": "",
+        })
+        self.assertRedirects(response, f"/fees/?school={self.school.pk}")
+        fee = FeeRecord.objects.get(school=self.school, student=self.student, title="Term 2")
+        self.assertEqual(fee.status, FeeRecord.Status.PARTIAL)
