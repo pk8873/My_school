@@ -1,6 +1,7 @@
 from django.contrib.auth import views as auth_views
 from django.urls import path
 from . import views
+from .community import community_feed
 from .fee_receipts import fee_payment_receipt_pdf
 
 urlpatterns = [
@@ -28,6 +29,7 @@ urlpatterns = [
     path("students/<int:student_id>/fee-statement.pdf", views.student_fee_statement_pdf, name="student_fee_statement_pdf"),
     path("academics/", views.academics, name="academics"),
     path("announcements/inbox/", views.announcement_inbox, name="announcement_inbox"),
+    path("community/", community_feed, name="community_feed"),
     path("events/", views.school_events, name="school_events"),
     path("events/<int:event_id>/rsvps.csv", views.school_event_rsvp_csv, name="school_event_rsvp_csv"),
     path("homework/<int:homework_id>/submit/", views.homework_submit, name="homework_submit"),
