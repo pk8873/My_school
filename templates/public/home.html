@@ -1,0 +1,55 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102a43">
+  <meta name="description" content="School Saathi brings school operations, academic updates, fee records and parent communication into one organized workspace.">
+  <title>School Saathi · School management, made clearer</title>
+  <link rel="manifest" href="{% static 'pwa/manifest.webmanifest' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body class="public-home">
+  <header class="public-nav">
+    <a class="public-brand" href="/" aria-label="School Saathi home"><span class="public-brand-mark">S</span><span>School <strong>Saathi</strong><small>School operations workspace</small></span></a>
+    <nav aria-label="Main navigation"><a class="public-nav-link" href="#features">Features</a><a class="public-nav-link" href="#roles">For your school</a><a class="public-nav-cta" href="{% url 'login' %}">Sign in <span aria-hidden="true">↗</span></a></nav>
+  </header>
+  <main>
+    <section class="public-hero">
+      <div class="public-hero-copy">
+        <span class="public-kicker"><span></span> SCHOOL MANAGEMENT · PARENT COMMUNICATION</span>
+        <h1>Less paperwork.<br><span>More room to learn.</span></h1>
+        <p class="public-hero-lede">A connected workspace for school teams, teachers, parents and students—designed to keep everyday school work clearer and more organized.</p>
+        <div class="public-hero-actions"><a class="public-primary-btn" href="{% url 'login' %}">Open school workspace <span aria-hidden="true">→</span></a><a class="public-secondary-btn" href="#features">Explore features</a></div>
+        <div class="public-trust-note"><span aria-hidden="true">✓</span> Role-based access · School-scoped records · Mobile-friendly design</div>
+      </div>
+      <div class="public-hero-visual" aria-label="Illustration of a school dashboard">
+        <div class="public-orbit public-orbit-one"></div><div class="public-orbit public-orbit-two"></div>
+        <div class="public-dashboard-preview">
+          <div class="preview-top"><div class="preview-logo">S</div><div><b>School overview</b><small>School Saathi workspace</small></div><span class="preview-menu">•••</span></div>
+          <div class="preview-welcome"><small>YOUR SCHOOL, AT A GLANCE</small><h2>One clearer view.</h2><p>Daily work, in one place.</p></div>
+          <div class="preview-metrics"><div><span class="metric-dot blue"></span><small>Academics</small><b>Organized</b></div><div><span class="metric-dot gold"></span><small>Communication</small><b>Connected</b></div></div>
+          <div class="preview-list"><div><span class="preview-list-icon">✓</span><span><b>Attendance & learning</b><small>Records and classroom updates</small></span><span class="preview-arrow">↗</span></div><div><span class="preview-list-icon peach">₹</span><span><b>Fee records</b><small>Payments and balances</small></span><span class="preview-arrow">↗</span></div><div><span class="preview-list-icon green">↗</span><span><b>School notices</b><small>Role-aware communication</small></span><span class="preview-arrow">↗</span></div></div>
+          <div class="preview-footer"><span></span>Built for day-to-day school workflows</div>
+        </div>
+        <div class="public-floating-note"><span class="floating-check">✓</span><span><b>One shared workspace</b><small>Different roles, relevant access</small></span></div>
+      </div>
+    </section>
+    <section class="public-proof-strip" aria-label="Platform principles"><div><span>01</span><b>Organized operations</b><small>Records in one workflow</small></div><div><span>02</span><b>Role-aware access</b><small>Relevant views for each role</small></div><div><span>03</span><b>Mobile-ready experience</b><small>Designed for smaller screens</small></div></section>
+    <section class="public-section" id="features"><div class="public-section-heading"><span class="public-kicker">THE WORKSPACE</span><h2>Everyday school work,<br>more connected.</h2><p>Core tools help school teams keep routine work, learning updates and communication together.</p></div>
+      <div class="public-feature-grid">
+        <article class="public-feature-card"><span class="public-feature-icon icon-blue">▤</span><h3>Student & class records</h3><p>Keep admissions, class sections and student profiles organized by school.</p><span class="public-card-tag">ADMINISTRATION</span></article>
+        <article class="public-feature-card"><span class="public-feature-icon icon-green">✓</span><h3>Attendance & academics</h3><p>Support attendance, exams, homework and timetable workflows.</p><span class="public-card-tag">TEACHING</span></article>
+        <article class="public-feature-card"><span class="public-feature-icon icon-gold">₹</span><h3>Fee records</h3><p>Track fee entries, payment history and balances in the school workspace.</p><span class="public-card-tag">FINANCE</span></article>
+        <article class="public-feature-card"><span class="public-feature-icon icon-purple">◉</span><h3>Notices & events</h3><p>Share school announcements and events with relevant audiences.</p><span class="public-card-tag">COMMUNICATION</span></article>
+        <article class="public-feature-card"><span class="public-feature-icon icon-peach">▣</span><h3>Parent & student access</h3><p>Give linked families access to relevant learning and fee information.</p><span class="public-card-tag">FAMILY PORTAL</span></article>
+        <article class="public-feature-card"><span class="public-feature-icon icon-blue">⌁</span><h3>Installable PWA foundation</h3><p>Use a mobile-friendly web experience with a conservative static-asset cache.</p><span class="public-card-tag">MOBILE ACCESS</span></article>
+      </div>
+    </section>
+    <section class="public-roles-section" id="roles"><div class="public-roles-copy"><span class="public-kicker">ONE PLATFORM, RELEVANT VIEWS</span><h2>Built around the people<br>who keep school moving.</h2><p>School Saathi separates access by role so each person can focus on the workflows relevant to them.</p><a class="public-primary-btn" href="{% url 'login' %}">Sign in to continue <span aria-hidden="true">→</span></a></div><div class="public-role-list"><div><span class="role-number">01</span><span><b>School administrators & principals</b><small>School operations, people and reports</small></span><span class="role-arrow">↗</span></div><div><span class="role-number">02</span><span><b>Teachers & accountants</b><small>Academic and finance workflows</small></span><span class="role-arrow">↗</span></div><div><span class="role-number">03</span><span><b>Parents & students</b><small>Relevant learning updates and records</small></span><span class="role-arrow">↗</span></div></div></section>
+    <section class="public-final-cta"><div><span class="public-kicker">READY TO CONTINUE?</span><h2>Your school workspace is one sign-in away.</h2><p>Use the account provided by your school administrator.</p></div><a class="public-primary-btn" href="{% url 'login' %}">Sign in securely <span aria-hidden="true">→</span></a></section>
+  </main>
+  <footer class="public-footer"><a class="public-brand" href="/"><span class="public-brand-mark">S</span><span>School <strong>Saathi</strong><small>School operations workspace</small></span></a><p>School Saathi · Early access build. Features and deployment readiness should be verified before production use.</p><a href="{% url 'login' %}">Sign in</a></footer>
+</body>
+</html>
