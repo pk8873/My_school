@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from django.http import FileResponse, JsonResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,4 +22,6 @@ def service_worker(request):
 
 
 def home(request):
-    return redirect("dashboard" if request.user.is_authenticated else "login")
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+    return render(request, "public/home.html")
