@@ -10,3 +10,21 @@
 
 .subscription-inline-form{min-width:650px}.subscription-fields{display:grid;grid-template-columns:repeat(3,minmax(110px,1fr));gap:10px;align-items:end}.subscription-fields label{display:block;font-size:10px;font-weight:750;color:#58677b;margin-bottom:4px}.subscription-fields input,.subscription-fields select{width:100%;font-size:11px;padding:7px 8px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.form-field{min-width:0}.form-field label{display:block;font-size:11px;font-weight:750;color:#58677b;margin-bottom:5px}.form-field input,.form-field select,.form-field textarea{width:100%}.form-field small{display:block;margin-top:4px}.form-field-wide{grid-column:1/-1}.checklist{padding-left:20px;color:#58677b;font-size:12px;line-height:2}
 @media(max-width:700px){.form-grid{grid-template-columns:1fr}.subscription-fields{grid-template-columns:repeat(2,minmax(110px,1fr))}}
+
+
+/* Responsive school community feed */
+.community-toolbar{display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:18px}
+.community-toolbar .community-search{flex:1 1 260px;min-width:0}
+.community-post{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:var(--shadow);overflow-wrap:anywhere}
+.community-post-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.community-post-title{font-size:16px;line-height:1.4;font-weight:800;color:#243750;margin:0 0 6px}
+.community-post-meta{font-size:11px;color:var(--muted);line-height:1.6}
+.community-post-body{font-size:13px;line-height:1.8;color:#405168;overflow-wrap:anywhere}
+.community-compose{background:linear-gradient(135deg,#fff,#f8fbff);border:1px solid #dfe8f6;border-radius:15px;padding:20px;margin-bottom:20px}
+.community-compose h2{font-size:16px;font-weight:800;margin:0 0 6px}
+.community-compose .form-text{font-size:11px;color:var(--muted)}
+.community-state{border:1px dashed #cdd8e7;border-radius:13px;padding:30px 18px;text-align:center;background:#fbfcfe}
+.community-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:18px}
+.community-pagination .page-label{font-size:12px;color:var(--muted)}
+:focus-visible{outline:3px solid #80aaff;outline-offset:2px}
+@media(max-width:640px){.community-post{padding:15px;border-radius:12px}.community-post-header{flex-direction:column}.community-compose{padding:15px}.community-toolbar .btn{width:100%}}
