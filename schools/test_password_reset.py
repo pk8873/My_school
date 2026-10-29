@@ -45,7 +45,19 @@ class PasswordResetFlowTests(TestCase):
         body = mail.outbox[0].body
         link = next(line.strip() for line in body.splitlines() if "/accounts/reset/" in line)
         path = "/" + link.split("/", 3)[3]
-        response = self.client.get(path)
+        response = self.client.get(path, follow=True)
         self.assertEqual(response.status_code, 200)
-        # Django redirects once after the first token check, setting a session token.
         self.assertContains(response, "Choose a new password")
+        confirm_path = response.request["PATH_INFO"]
+        response = self.client.post(
+            confirm_path,
+            {
+                "new_password1": "A-Different-Strong-Password-456!",
+                "new_password2": "A-Different-Strong-Password-456!",
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Password updated")
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("A-Different-Strong-Password-456!"))
