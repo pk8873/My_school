@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from django.db import DatabaseError, connection
 from django.http import FileResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
@@ -9,7 +10,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 @require_GET
 def health(request):
-    return JsonResponse({"status": "ok"})
+    """Return service health only when the configured database can answer a query."""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+    except DatabaseError:
+        response = JsonResponse(
+            {"status": "unhealthy", "database": "unavailable"},
+            status=503,
+        )
+    else:
+        response = JsonResponse({"status": "ok", "database": "ok"})
+
+    # Monitoring responses should not be cached by browsers or proxies.
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @require_GET
