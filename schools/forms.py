@@ -93,13 +93,15 @@ class ExamResultForm(BootstrapModelForm):
 class HomeworkForm(BootstrapModelForm):
     class Meta:
         model = Homework
-        fields = ["classroom", "title", "instructions", "assigned_date", "due_date", "is_published"]
+        fields = ["classroom", "title", "instructions", "assigned_date", "due_date", "is_published", "attachment"]
         widgets = {"assigned_date": forms.DateInput(attrs={"type": "date"}), "due_date": forms.DateInput(attrs={"type": "date"})}
 
     def __init__(self, *args, school, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["classroom"].queryset = ClassRoom.objects.filter(school=school, is_active=True)
         self.fields["classroom"].required = False
+        self.fields["attachment"].required = False
+        self.fields["attachment"].help_text = "Optional PDF, JPG or PNG file (maximum 10 MB)."
 
 
 class AnnouncementForm(BootstrapModelForm):
@@ -324,12 +326,14 @@ class HomeworkSubmissionForm(forms.ModelForm):
     class Meta:
         from .models import HomeworkSubmission
         model = HomeworkSubmission
-        fields = ["submission_text"]
+        fields = ["submission_text", "attachment"]
         widgets = {"submission_text": forms.Textarea(attrs={"rows": 3, "placeholder": "Write your answer or paste your work here..."})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["submission_text"].widget.attrs["class"] = "form-control"
+        self.fields["attachment"].required = False
+        self.fields["attachment"].help_text = "Optional PDF, JPG or PNG file (maximum 10 MB)."
 
 
 class HomeworkFeedbackForm(forms.ModelForm):

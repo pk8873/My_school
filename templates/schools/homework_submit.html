@@ -3,9 +3,9 @@
 {% block content %}
 <div class="page-heading"><div><span class="eyebrow">STUDENT WORK</span><h1>Submit homework</h1><p>{{ membership.school.name }} · {{ homework.classroom|default:"All classes" }}</p></div><a class="btn btn-outline-primary" href="{% url 'academics' %}?school={{ membership.school_id }}">Back to academics</a></div>
 <section class="panel"><div class="panel-heading"><div><h2>{{ homework.title }}</h2><p>Due date: {{ homework.due_date|default:"Not set" }}</p></div>{% if submission %}<span class="status-pill">{{ submission.get_status_display }}</span>{% endif %}</div>
-<p>{{ homework.instructions|linebreaksbr }}</p>
+<p>{{ homework.instructions|linebreaksbr }}</p>{% if homework.attachment %}<p><a class="btn btn-sm btn-outline-primary" href="{% url 'homework_attachment_download' homework.id %}?school={{ membership.school_id }}">Download teacher attachment</a></p>{% endif %}
 {% if submission and submission.teacher_feedback %}<div class="notice-card"><strong>Teacher feedback</strong><p>{{ submission.teacher_feedback|linebreaksbr }}</p></div>{% endif %}
-<form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary" type="submit">{% if submission %}Update submission{% else %}Submit homework{% endif %}</button></form>
-<p class="text-secondary small mt-3">This version accepts text answers only. File/photo uploads are not included yet.</p>
+<form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary" type="submit">{% if submission %}Update submission{% else %}Submit homework{% endif %}</button></form>
+<p class="text-secondary small mt-3">Optional attachment: PDF, JPG or PNG, maximum 10 MB. Use a clear photo or scanned document.</p>
 </section>
 {% endblock %}

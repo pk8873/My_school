@@ -2,5 +2,5 @@
 {% block title %}Review homework · School Saathi{% endblock %}
 {% block content %}
 <div class="page-heading"><div><span class="eyebrow">TEACHER REVIEW</span><h1>Review homework</h1><p>{{ membership.school.name }} · {{ submission.student }} · {{ submission.homework.title }}</p></div><a class="btn btn-outline-primary" href="{% url 'academics' %}?school={{ membership.school_id }}">Back to academics</a></div>
-<section class="panel"><div class="notice-card"><div class="notice-meta">Submitted {{ submission.submitted_at|date:"d M Y, g:i A" }}</div><h2 class="h5">Student answer</h2><p>{{ submission.submission_text|linebreaksbr }}</p></div><form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary" type="submit">Save feedback</button></form></section>
+<section class="panel"><div class="notice-card"><div class="notice-meta">Submitted {{ submission.submitted_at|date:"d M Y, g:i A" }}</div><h2 class="h5">Student answer</h2><p>{{ submission.submission_text|linebreaksbr }}</p>{% if submission.attachment %}<p><a href="{% url 'homework_submission_attachment_download' submission.id %}?school={{ membership.school_id }}">Download student attachment</a></p>{% endif %}</div><form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary" type="submit">Save feedback</button></form></section>
 {% endblock %}
