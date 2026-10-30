@@ -3,7 +3,7 @@ from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import Http404
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
@@ -112,6 +112,8 @@ def bulk_exam_results(request):
                         result.save()
             except ValidationError as exc:
                 error = "; ".join(exc.messages)
+            except IntegrityError:
+                error = "Another marks update was saved at the same time. Reload the page and review the latest results."
             else:
                 messages.success(
                     request,
@@ -133,7 +135,12 @@ def bulk_exam_results(request):
             )
         }
     student_rows = [
-        {"student": student, "result": existing.get(student.pk)}
+        {
+            "student": student,
+            "result": existing.get(student.pk),
+            "input_marks": request.POST.get(f"marks_{student.pk}", "") if request.method == "POST" else "",
+            "input_remarks": request.POST.get(f"remarks_{student.pk}", "") if request.method == "POST" else "",
+        }
         for student in student_objects
     ]
     return render(request, "schools/bulk_exam_results.html", {
@@ -144,4 +151,5 @@ def bulk_exam_results(request):
         "selected_classroom": classroom,
         "student_rows": student_rows,
         "max_bulk_students": MAX_BULK_STUDENTS,
+        "is_post": request.method == "POST",
     })
