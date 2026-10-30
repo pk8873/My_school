@@ -3,6 +3,7 @@ from django.urls import path, reverse_lazy
 from . import views
 from .community import community_feed
 from .fee_receipts import fee_payment_receipt_pdf
+from .bulk_marks import bulk_exam_results
 
 urlpatterns = [
     path("accounts/login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
@@ -61,6 +62,7 @@ urlpatterns = [
     path("students/<int:student_id>/report-card.pdf", views.student_report_card_pdf, name="student_report_card_pdf"),
     path("students/<int:student_id>/fee-statement.pdf", views.student_fee_statement_pdf, name="student_fee_statement_pdf"),
     path("academics/", views.academics, name="academics"),
+    path("academics/bulk-marks/", bulk_exam_results, name="bulk_exam_results"),
     path("announcements/inbox/", views.announcement_inbox, name="announcement_inbox"),
     path("community/", community_feed, name="community_feed"),
     path("events/", views.school_events, name="school_events"),
