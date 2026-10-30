@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from .uploads import homework_attachment_path, homework_submission_attachment_path, validate_school_attachment
 
 class School(models.Model):
     name = models.CharField(max_length=200)
@@ -279,6 +280,7 @@ class Homework(models.Model):
     due_date = models.DateField(null=True, blank=True)
     assigned_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     is_published = models.BooleanField(default=True)
+    attachment = models.FileField(upload_to=homework_attachment_path, validators=[validate_school_attachment], blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -302,6 +304,7 @@ class HomeworkSubmission(models.Model):
     homework = models.ForeignKey(Homework, on_delete=models.CASCADE, related_name="submissions")
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name="homework_submissions")
     submission_text = models.TextField()
+    attachment = models.FileField(upload_to=homework_submission_attachment_path, validators=[validate_school_attachment], blank=True)
     submitted_at = models.DateTimeField(auto_now=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.SUBMITTED)
     teacher_feedback = models.TextField(blank=True)
