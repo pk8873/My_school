@@ -41,8 +41,8 @@
           <tr>
             <td>{{ row.student.admission_number }}</td>
             <td><strong>{{ row.student.first_name }} {{ row.student.last_name }}</strong></td>
-            <td><input class="form-control" type="number" name="marks_{{ row.student.pk }}" min="0" max="{{ selected_exam.max_marks }}" step="0.01" value="{{ row.result.marks_obtained|default_if_none:'' }}" aria-label="Marks for {{ row.student.first_name }} {{ row.student.last_name }}"></td>
-            <td><input class="form-control" type="text" name="remarks_{{ row.student.pk }}" maxlength="250" value="{{ row.result.remarks|default_if_none:'' }}" aria-label="Remarks for {{ row.student.first_name }} {{ row.student.last_name }}"></td>
+            <td><input class="form-control" type="number" name="marks_{{ row.student.pk }}" min="0" max="{{ selected_exam.max_marks }}" step="0.01" value="{% if is_post %}{{ row.input_marks }}{% else %}{{ row.result.marks_obtained|default_if_none:'' }}{% endif %}" aria-label="Marks for {{ row.student.first_name }} {{ row.student.last_name }}"></td>
+            <td><input class="form-control" type="text" name="remarks_{{ row.student.pk }}" maxlength="250" value="{% if is_post %}{{ row.input_remarks }}{% else %}{{ row.result.remarks|default_if_none:'' }}{% endif %}" aria-label="Remarks for {{ row.student.first_name }} {{ row.student.last_name }}"></td>
           </tr>
         {% endfor %}
         </tbody>
