@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}My attendance · School Saathi{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">FAMILY PORTAL</span><h1>My attendance</h1><p>Read-only attendance history for your linked student account(s).</p></div></div>
+<div class="row g-3 mb-4">
+<div class="col-6 col-xl"><div class="metric-card"><span>Marked days</span><strong>{{ summary.total }}</strong></div></div>
+<div class="col-6 col-xl"><div class="metric-card"><span>Present</span><strong>{{ summary.present }}</strong></div></div>
+<div class="col-6 col-xl"><div class="metric-card"><span>Absent</span><strong>{{ summary.absent }}</strong></div></div>
+<div class="col-6 col-xl"><div class="metric-card"><span>Late</span><strong>{{ summary.late }}</strong></div></div>
+<div class="col-6 col-xl"><div class="metric-card"><span>On leave</span><strong>{{ summary.leave }}</strong></div></div>
+</div>
+<section class="panel mb-4"><div class="panel-heading"><h2>Filter attendance</h2><p>Only records your account is allowed to view are included.</p></div>
+<form method="get" class="row g-3 align-items-end"><input type="hidden" name="school" value="{{ membership.school_id }}">
+{% if membership.role == "parent" %}<div class="col-12 col-md-3"><label class="form-label" for="student">Child</label><select class="form-select" id="student" name="student"><option value="">All linked children</option>{% for child in students %}<option value="{{ child.pk }}" {% if selected_student == child.pk|stringformat:"s" %}selected{% endif %}>{{ child.first_name }} {{ child.last_name }}</option>{% endfor %}</select></div>{% endif %}
+<div class="col-6 col-md-2"><label class="form-label" for="from">From date</label><input class="form-control" type="date" id="from" name="from" value="{{ date_from }}"></div>
+<div class="col-6 col-md-2"><label class="form-label" for="to">To date</label><input class="form-control" type="date" id="to" name="to" value="{{ date_to }}"></div>
+<div class="col-12 col-md-3"><label class="form-label" for="status">Status</label><select class="form-select" id="status" name="status"><option value="">All statuses</option>{% for value,label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+<div class="col-12 col-md-2 d-flex gap-2"><button class="btn btn-primary" type="submit">Apply</button><a class="btn btn-outline-secondary" href="{% url 'my_attendance_history' %}?school={{ membership.school_id }}">Reset</a></div></form></section>
+<section class="panel"><div class="panel-heading"><h2>Attendance register</h2><p>Latest records first.</p></div><div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Date</th><th>Student</th><th>Class</th><th>Status</th><th>Note</th></tr></thead><tbody>
+{% for row in records %}<tr><td>{{ row.date|date:"d M Y" }}</td><td>{{ row.student.first_name }} {{ row.student.last_name }}</td><td>{{ row.student.classroom.name }} {{ row.student.classroom.section }}</td><td>{{ row.get_status_display }}</td><td>{{ row.note|default:"—" }}</td></tr>{% empty %}<tr><td colspan="5" class="empty-state">No attendance records match these filters.</td></tr>{% endfor %}
+</tbody></table></div>{% if showing_limit %}<p class="form-note">Showing the latest 500 matching records. Narrow the date range to view a smaller period.</p>{% endif %}</section>
+{% endblock %}
