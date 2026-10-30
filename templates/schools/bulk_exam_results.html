@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Bulk exam marks · School Saathi{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><span class="eyebrow">ACADEMICS</span><h1>Bulk exam marks</h1><p>Enter or update marks for one class in a single, school-scoped form.</p></div>
+  <a class="btn btn-outline-primary" href="{% url 'academics' %}?school={{ membership.school_id }}">Back to academics</a>
+</div>
+<section class="panel">
+  <div class="panel-heading"><div><h2>Choose exam and class</h2><p>Only exams, classes and students from {{ membership.school.name }} are available.</p></div></div>
+  <form method="get" class="row g-3 align-items-end">
+    <input type="hidden" name="school" value="{{ membership.school_id }}">
+    <div class="col-md-5"><label class="form-label" for="exam">Exam</label>
+      <select class="form-select" id="exam" name="exam" required>
+        <option value="">Select exam</option>
+        {% for item in exams %}<option value="{{ item.pk }}" {% if selected_exam.pk == item.pk %}selected{% endif %}>{{ item.title }} · {{ item.exam_date }}{% if item.classroom %} · {{ item.classroom }}{% endif %}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-5"><label class="form-label" for="classroom">Class</label>
+      <select class="form-select" id="classroom" name="classroom" {% if selected_exam.classroom %}disabled{% endif %}>
+        <option value="">Select class</option>
+        {% for item in classrooms %}<option value="{{ item.pk }}" {% if selected_classroom.pk == item.pk %}selected{% endif %}>{{ item.name }} {{ item.section }} · {{ item.academic_year }}</option>{% endfor %}
+      </select>
+      {% if selected_exam.classroom %}<input type="hidden" name="classroom" value="{{ selected_exam.classroom_id }}"><small class="text-secondary">This exam is assigned to {{ selected_exam.classroom }}.</small>{% endif %}
+    </div>
+    <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Load students</button></div>
+  </form>
+</section>
+{% if selected_exam and selected_classroom and student_rows %}
+<section class="panel mt-4">
+  <div class="panel-heading"><div><h2>{{ selected_exam.title }} — {{ selected_classroom }}</h2><p>Maximum marks: {{ selected_exam.max_marks }} · {{ student_rows|length }} students · up to {{ max_bulk_students }} per save.</p></div></div>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="school" value="{{ membership.school_id }}">
+    <input type="hidden" name="exam" value="{{ selected_exam.pk }}">
+    <input type="hidden" name="classroom" value="{{ selected_classroom.pk }}">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th>Admission no.</th><th>Student</th><th>Marks / {{ selected_exam.max_marks }}</th><th>Remarks</th></tr></thead>
+        <tbody>
+        {% for row in student_rows %}
+          <tr>
+            <td>{{ row.student.admission_number }}</td>
+            <td><strong>{{ row.student.first_name }} {{ row.student.last_name }}</strong></td>
+            <td><input class="form-control" type="number" name="marks_{{ row.student.pk }}" min="0" max="{{ selected_exam.max_marks }}" step="0.01" value="{{ row.result.marks_obtained|default_if_none:'' }}" aria-label="Marks for {{ row.student.first_name }} {{ row.student.last_name }}"></td>
+            <td><input class="form-control" type="text" name="remarks_{{ row.student.pk }}" maxlength="250" value="{{ row.result.remarks|default_if_none:'' }}" aria-label="Remarks for {{ row.student.first_name }} {{ row.student.last_name }}"></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-secondary small">Blank marks are skipped and existing results remain unchanged. If any entered mark is invalid, no marks from this submission are saved.</p>
+    <button class="btn btn-primary" type="submit">Save all entered marks</button>
+  </form>
+</section>
+{% elif selected_exam and not selected_classroom %}
+<div class="alert alert-info mt-4">This exam covers the whole school. Select a class above to load its students.</div>
+{% elif selected_exam and not student_rows %}
+<div class="alert alert-secondary mt-4">No students are available for the selected exam and class.</div>
+{% endif %}
+{% endblock %}
