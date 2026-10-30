@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import F, Q, Sum
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from datetime import datetime
@@ -556,7 +556,7 @@ def academics(request):
 
     exam_form = ExamForm(request.POST or None, school=membership.school, prefix="exam") if can_manage else None
     result_form = ExamResultForm(request.POST or None, school=membership.school, prefix="result") if can_manage else None
-    homework_form = HomeworkForm(request.POST or None, school=membership.school, prefix="homework") if can_manage else None
+    homework_form = HomeworkForm(request.POST or None, request.FILES or None, school=membership.school, prefix="homework") if can_manage else None
     announcement_form = AnnouncementForm(request.POST or None, prefix="announcement") if role in MANAGEMENT_ROLES else None
 
     if request.method == "POST":
@@ -631,6 +631,69 @@ def academics(request):
 
 
 @login_required
+@require_GET
+def homework_attachment_download(request, homework_id):
+    """Serve a homework file only to academic staff or its assigned family/student."""
+    membership = get_membership(request)
+    from .models import Homework
+    homework = Homework.objects.filter(pk=homework_id, school=membership.school).first()
+    if homework is None or not homework.attachment:
+        raise Http404("Homework attachment not found.")
+    allowed = membership.role in ACADEMIC_ROLES
+    if membership.role == Membership.Role.STUDENT:
+        student = Student.objects.filter(
+            school=membership.school, portal_user=request.user, is_active=True
+        ).first()
+        allowed = bool(
+            homework.is_published and student and
+            (homework.classroom_id is None or homework.classroom_id == student.classroom_id)
+        )
+    elif membership.role == Membership.Role.PARENT:
+        linked_children = Student.objects.filter(
+            school=membership.school, parent_links__parent=request.user,
+            parent_links__is_active=True, is_active=True
+        )
+        if homework.classroom_id:
+            linked_children = linked_children.filter(classroom_id=homework.classroom_id)
+        allowed = homework.is_published and linked_children.exists()
+    if not allowed:
+        raise Http404("Homework attachment not found.")
+    return FileResponse(
+        homework.attachment.open("rb"), as_attachment=True,
+        filename=homework.attachment.name.rsplit("/", 1)[-1],
+        content_type="application/octet-stream",
+    )
+
+
+@login_required
+@require_GET
+def homework_submission_attachment_download(request, submission_id):
+    """Serve a submitted file only to the submitting student, linked parent or academic staff."""
+    membership = get_membership(request)
+    from .models import HomeworkSubmission
+    submission = HomeworkSubmission.objects.filter(
+        pk=submission_id, school=membership.school
+    ).select_related("student").first()
+    if submission is None or not submission.attachment:
+        raise Http404("Submission attachment not found.")
+    allowed = membership.role in ACADEMIC_ROLES
+    if membership.role == Membership.Role.STUDENT:
+        allowed = submission.student.portal_user_id == request.user.pk and submission.student.is_active
+    elif membership.role == Membership.Role.PARENT:
+        allowed = Student.objects.filter(
+            pk=submission.student_id, school=membership.school,
+            parent_links__parent=request.user, parent_links__is_active=True
+        ).exists()
+    if not allowed:
+        raise Http404("Submission attachment not found.")
+    return FileResponse(
+        submission.attachment.open("rb"), as_attachment=True,
+        filename=submission.attachment.name.rsplit("/", 1)[-1],
+        content_type="application/octet-stream",
+    )
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def homework_submit(request, homework_id):
     """A student may submit only for their linked profile and assigned school/class."""
@@ -654,7 +717,7 @@ def homework_submit(request, homework_id):
         school=membership.school, homework=homework, student=student
     ).first()
     if request.method == "POST":
-        form = HomeworkSubmissionForm(request.POST, instance=submission)
+        form = HomeworkSubmissionForm(request.POST, request.FILES, instance=submission)
         if form.is_valid():
             obj = form.save(commit=False)
             obj.school = membership.school
