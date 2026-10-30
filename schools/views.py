@@ -1650,6 +1650,35 @@ def my_fee_history(request):
 
 
 @login_required
+@require_GET
+def my_attendance_history(request):
+    """Read-only, date-filtered attendance history for linked children or a student profile."""
+    from django.utils.dateparse import parse_date
+    membership = get_membership(request)
+    if membership.role == Membership.Role.PARENT:
+        students = Student.objects.filter(school=membership.school, is_active=True, parent_links__parent=request.user, parent_links__is_active=True).select_related("classroom").distinct()
+    elif membership.role == Membership.Role.STUDENT:
+        students = Student.objects.filter(school=membership.school, is_active=True, portal_user=request.user).select_related("classroom")
+    else:
+        raise PermissionDenied("This page is available to parent and student accounts.")
+    selected_student = request.GET.get("student", "").strip()
+    if selected_student.isdigit():
+        students = students.filter(pk=int(selected_student))
+    student_ids = list(students.values_list("pk", flat=True))
+    records = AttendanceRecord.objects.filter(school=membership.school, student_id__in=student_ids).select_related("student", "student__classroom").order_by("-date", "student__first_name", "-pk")
+    from_raw, to_raw = request.GET.get("from", "").strip(), request.GET.get("to", "").strip()
+    date_from, date_to = parse_date(from_raw) if from_raw else None, parse_date(to_raw) if to_raw else None
+    if date_from: records = records.filter(date__gte=date_from)
+    if date_to: records = records.filter(date__lte=date_to)
+    selected_status = request.GET.get("status", "").strip()
+    valid_statuses = {value for value, _label in AttendanceRecord.Status.choices}
+    if selected_status in valid_statuses: records = records.filter(status=selected_status)
+    else: selected_status = ""
+    summary = {"total": records.count(), "present": records.filter(status=AttendanceRecord.Status.PRESENT).count(), "absent": records.filter(status=AttendanceRecord.Status.ABSENT).count(), "late": records.filter(status=AttendanceRecord.Status.LATE).count(), "leave": records.filter(status=AttendanceRecord.Status.LEAVE).count()}
+    return render(request, "schools/my_attendance_history.html", {"membership": membership, "students": students, "records": records[:500], "selected_student": selected_student, "date_from": from_raw if date_from else "", "date_to": to_raw if date_to else "", "selected_status": selected_status, "summary": summary, "showing_limit": summary["total"] > 500, "status_choices": AttendanceRecord.Status.choices})
+
+
+@login_required
 @require_http_methods(["GET", "POST"])
 def fee_payment_history(request, fee_id):
     """View an individual fee's manual payment history and record a new collection."""
